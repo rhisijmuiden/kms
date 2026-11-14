@@ -10,7 +10,7 @@
 </head>
 <body>
 {% set nav_main = [('dashboard', 'Dashboard', url_for('main.dashboard')), ('clients', 'Clients', url_for('main.clients')), ('activation', 'Activation guide', url_for('main.activation')), ('products', 'Products & keys', url_for('main.products'))] %}
-{% set nav_system = [('server', 'KMS server', url_for('main.server')), ('mail', 'Mail server', url_for('main.mail')), ('backups', 'Backups', url_for('main.backups')), ('users', 'Users', url_for('main.users'))] %}
+{% set nav_system = [('server', 'KMS server', url_for('main.server')), ('network', 'Network & access', url_for('main.network')), ('mail', 'Mail server', url_for('main.mail')), ('backups', 'Backups', url_for('main.backups')), ('users', 'Users', url_for('main.users'))] %}
 <div class="shell">
   <nav class="side" aria-label="{{ t('Main menu') }}">
     <div class="side-top">

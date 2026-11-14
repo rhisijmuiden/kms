@@ -37,6 +37,7 @@
   <label class="check"><input type="checkbox" name="notify_backup_fail" {% if s.notify_backup_fail %}checked{% endif %}>{{ t('Failed backups') }}</label>
   <label class="check"><input type="checkbox" name="notify_backup_ok" {% if s.notify_backup_ok %}checked{% endif %}>{{ t('Successful backups') }}</label>
   <label class="check"><input type="checkbox" name="notify_update" {% if s.notify_update %}checked{% endif %}>{{ t('New versions of KMS Console') }}</label>
+  <label class="check"><input type="checkbox" name="notify_blocked" {% if s.notify_blocked %}checked{% endif %}>{{ t('Repeated blocked activation attempts') }}</label>
 
   <div class="row">
     <button class="btn" type="submit" name="action" value="test">{{ t('Save and send test mail') }}</button>

@@ -1,0 +1,13 @@
+[Unit]
+Description=KMS Console firewall and HTTPS (Network & access)
+After=network-pre.target nftables.service
+Before=kms-server.service kms-console.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/kms-ctl net-apply --boot
+
+[Install]
+WantedBy=multi-user.target

@@ -10,7 +10,8 @@ from flask import (Blueprint, Response, abort, flash, g, jsonify, make_response,
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-from . import backup, config, i18n, kms, mailer, remote, scheduler, scripts, store, system
+from . import backup, config, i18n, kms, mailer, network, remote, scheduler, scripts, store, system
+from .netrender import NetError
 
 bp = Blueprint("main", __name__)
 _failures = {}
@@ -374,7 +375,7 @@ def mail():
         for f in ("from_name", "from_address", "reply_to"):
             store.set(f"mail.{f}", request.form.get(f, "").strip())
         store.set("mail.recipients", recips)
-        for f in ("notify_backup_ok", "notify_backup_fail", "notify_update"):
+        for f in ("notify_backup_ok", "notify_backup_fail", "notify_update", "notify_blocked"):
             store.set(f"mail.{f}", bool(request.form.get(f)))
         flash(_t("Mail settings saved."), "ok")
         if request.form.get("action") == "test":
@@ -632,6 +633,161 @@ def settings_update():
         store.set("update.auto_check", bool(request.form.get("auto_check")))
         flash(_t("Update settings saved."), "ok")
     return redirect(url_for("main.server"))
+
+
+# ---------------------------------------------------------------- network & access
+
+def _client_ip():
+    return request.remote_addr or ""
+
+
+def _apply_or_revert(revert):
+    """Apply the firewall/Caddy. When kms-ctl refuses, put the previous settings back."""
+    try:
+        network.apply()
+        return True
+    except system.SystemError_ as exc:
+        if not system._available():  # noqa: SLF001 - development mode, nothing to apply
+            store.set("net.last_error", "")
+            flash(_t("Saved. The firewall is not applied in development mode."), "ok")
+            return True
+        revert()
+        network.invalidate()
+        try:
+            network.write_config()
+        except OSError:
+            pass
+        flash(_t("Not applied, the previous settings are back: {err}", err=exc), "error")
+        return False
+
+
+def _snapshot(*keys):
+    saved = {k: store.get(k) for k in keys}
+
+    def revert():
+        for k, v in saved.items():
+            store.set(k, v)
+    return revert
+
+
+def _lines(text):
+    return [p.strip() for p in re.split(r"[\s,;]+", text or "") if p.strip()][:50]
+
+
+@bp.route("/network", endpoint="network")
+@login_required
+def network_page():
+    tab = "kms" if request.args.get("tab") == "kms" else "web"
+    s = network.settings()
+    ctx = {"active": "network", "tab": tab, "s": s, "client_ip": _client_ip(), "lan": network.local_network(),
+           "console_port": config.PORT, "kms_port": store.get("kms.port"), "host_ip": kms.detect_ip(),
+           "via_proxy": bool(request.environ.get("kms.proxy_addr")), "is_https": request.is_secure,
+           "https_check": store.get("net.https_check") or {}, "mail_on": store.get("mail.enabled"),
+           "notify_blocked": store.get("mail.notify_blocked")}
+    for e in s["kms_acl"]:
+        try:
+            e["public"] = network.parse_entry(e["cidr"])[1]
+        except NetError:
+            e["public"] = True
+    if tab == "kms":
+        ctx["activity"] = network.activity(s["kms_acl"])
+        ctx["blocked"] = network.blocked() if s["kms_restrict"] else []
+    return render_template("network.html", **ctx)
+
+
+@bp.route("/network/mode", methods=["POST"])
+@login_required
+def network_mode():
+    mode = request.form.get("mode", "lan")
+    old_mode = store.get("net.mode")
+    proxies = []
+    try:
+        for p in _lines(request.form.get("proxy_ips")):
+            net, _ = network.parse_entry(p)
+            proxies.append({"cidr": str(net) if net.num_addresses > 1 else str(net.network_address), "descr": "", "added": int(time.time())})
+        close = bool(request.form.get("close_console"))
+        if mode == "caddy" and old_mode != "caddy":
+            close = False   # keep port 8080 open until HTTPS has been seen working
+        if mode == "caddy" and close and not request.environ.get("kms.proxy_addr"):
+            raise NetError("open the web interface through https://your-domain first, then close port 8080")
+        values = {"mode": mode, "domain": (request.form.get("domain") or "").strip().lower(),
+                  "acme_email": (request.form.get("acme_email") or "").strip(), "close_console": close,
+                  "proxy_ips": proxies if mode == "proxy" else store.get("net.proxy_ips")}
+        network.check(values)
+        if mode == "proxy":
+            ip = _client_ip()
+            via = request.environ.get("kms.proxy_addr") or ip
+            if not network.covered(via, proxies) and not network.covered(ip, store.get("net.web_acl") or []):
+                raise NetError("you would lock yourself out: add your own address to the web access list first, or open this page through the proxy")
+    except NetError as exc:
+        flash(_t("Not saved: {err}", err=_t(str(exc))), "error")
+        return redirect(url_for("main.network"))
+    revert = _snapshot("net.mode", "net.domain", "net.acme_email", "net.close_console", "net.proxy_ips")
+    for k, v in values.items():
+        store.set(f"net.{k}", v)
+    if _apply_or_revert(revert):
+        if mode == "caddy" and old_mode != "caddy":
+            flash(_t("Caddy is requesting a certificate for {domain}. Open https://{domain} to check it, then close port 8080.", domain=values["domain"]), "ok")
+        else:
+            flash(_t("Network settings saved and applied."), "ok")
+    return redirect(url_for("main.network"))
+
+
+@bp.route("/network/acl", methods=["POST"])
+@login_required
+def network_acl():
+    scope = "kms" if request.form.get("scope") == "kms" else "web"
+    action = request.form.get("action")
+    revert = _snapshot(f"net.{scope}_acl")
+    try:
+        if action == "add":
+            cidr = request.form.get("cidr", "")
+            if request.form.get("mine"):
+                cidr = _client_ip()
+            _, public = network.add_entry(scope, cidr, request.form.get("descr", ""), _client_ip())
+            if public:
+                flash(_t("{cidr} is a public address. Only add fixed addresses of sites you know.", cidr=cidr), "error")
+        elif action == "remove":
+            network.remove_entry(scope, request.form.get("cidr", ""), _client_ip())
+        else:
+            abort(400)
+    except NetError as exc:
+        flash(_t("Not saved: {err}", err=_t(str(exc))), "error")
+        return redirect(url_for("main.network", tab=scope))
+    if _apply_or_revert(revert):
+        flash(_t("Access list updated."), "ok")
+    return redirect(url_for("main.network", tab=scope))
+
+
+@bp.route("/network/kms", methods=["POST"])
+@login_required
+def network_kms():
+    restrict = request.form.get("restrict") == "1"
+    try:
+        network.check({"kms_restrict": restrict})
+    except NetError as exc:
+        flash(_t("Not saved: {err}", err=_t(str(exc))), "error")
+        return redirect(url_for("main.network", tab="kms"))
+    revert = _snapshot("net.kms_restrict")
+    store.set("net.kms_restrict", restrict)
+    if _apply_or_revert(revert):
+        flash(_t("Only addresses on the list can use the KMS server now.") if restrict
+              else _t("Every address can use the KMS server again."), "ok")
+    return redirect(url_for("main.network", tab="kms"))
+
+
+@bp.route("/network/test-https", methods=["POST"])
+@login_required
+def network_test_https():
+    domain = store.get("net.domain")
+    result = network.check_https(domain) if domain else {"ok": False, "error": "no domain"}
+    result["ts"] = int(time.time())
+    store.set("net.https_check", result)
+    if result["ok"]:
+        flash(_t("HTTPS works for {domain}.", domain=domain), "ok")
+    else:
+        flash(_t("HTTPS does not work yet: {err}", err=result["error"]), "error")
+    return redirect(url_for("main.network"))
 
 
 @bp.route("/healthz")

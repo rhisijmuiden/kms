@@ -213,3 +213,22 @@ dl.facts dd{margin:0;font-weight:600;min-width:0;overflow-wrap:anywhere}
   .form-grid{grid-template-columns:minmax(0,1fr)}
   .f,.f.w1,.f.w2,.f.w4,.f.w6{grid-column:auto}
 }
+
+/* Network & access */
+.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mode{border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px;cursor:pointer;background:var(--raised)}
+.mode:has(input:checked){border:2px solid var(--lagoon);padding:15px;background:#F3FBFA}
+.mode:has(input:focus-visible){outline:3px solid var(--lagoon);outline-offset:2px}
+.mode .t{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+.mode .t input{width:18px;height:18px;accent-color:var(--lagoon)}
+.mode p{margin:0;font-size:13.5px;color:var(--slate)}
+.mode-panel[hidden]{display:none}
+.cert{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;font-size:14px}
+.cert.ok{background:var(--ok-bg);color:var(--ok)}
+.cert.bad{background:var(--warn-bg);color:var(--warn)}
+.cert .txt{margin-right:auto}
+.acl-add{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.acl-add .f{grid-column:auto;flex:1 1 200px}
+.acl-add .f.grow{flex:2 1 260px}
+.mono{font-family:var(--font-mono);font-size:13px}
+@media (max-width:1100px){.modes{grid-template-columns:minmax(0,1fr)}}

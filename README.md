@@ -104,12 +104,26 @@ Branch names can be changed under **KMS server › Updates**. Before every updat
 
 A backup chain starts with a full backup; each incremental only contains files that changed. A restore applies the full backup and every incremental up to the one you pick, after first making a safety backup. Remote locations: FTP, FTPS (explicit TLS), SCP and SFTP (password or SSH key, host key trusted on first use).
 
+### Network & access
+
+Under **System › Network & access** you choose how the web interface is reached:
+
+* **Local network only**: `http://<ip>:8080`.
+* **Own HTTPS with Caddy**: Caddy runs in the container and gets a Let's Encrypt certificate for your domain. Ports 80 and 443 must reach the container. Port 80 stays open for the certificate check; once HTTPS works you can close port 8080.
+* **Behind a reverse proxy**: your proxy (Nginx Proxy Manager, Traefik, HAProxy) handles HTTPS and points to `http://<ip>:8080`. Only the proxy addresses you enter are trusted for `X-Forwarded-For`.
+
+Both the web interface and the KMS port have their own access list. The KMS list works in every mode and blocks everything that is not on it; blocked addresses are shown for 7 days and can trigger an email. Public ranges wider than /24 and `0.0.0.0/0` are refused. The firewall is nftables inside the container (`kms-firewall.service` loads it at boot). In an unprivileged Proxmox container the `nf_tables` module must be loaded on the host.
+
+Locked out of the web interface? Run `pct enter <id>` and `kms-ctl access-reset`.
+
 ### Useful commands
 
 ```bash
 kms-ctl status
 kms-ctl logs 100
 kms-ctl reset-password admin
+kms-ctl net-status
+kms-ctl access-reset
 journalctl -u kms-console -f
 ```
 
