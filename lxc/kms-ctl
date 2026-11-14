@@ -70,6 +70,9 @@ case "$cmd" in
     if (
       set -e
       git -C "$APP_DIR" fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch"
+      # Refuse branches that do not contain KMS Console (for example the old Docker-only master)
+      git -C "$APP_DIR" cat-file -e "origin/$branch:lxc/install.sh" 2>/dev/null \
+        || { echo "Branch $branch does not contain KMS Console (lxc/install.sh missing). Nothing changed."; exit 1; }
       git -C "$APP_DIR" checkout -B "$branch" "origin/$branch"
       git -C "$APP_DIR" reset --hard "origin/$branch"
       echo "Now at $(cat "$APP_DIR/VERSION") ($(git -C "$APP_DIR" rev-parse --short HEAD))"
