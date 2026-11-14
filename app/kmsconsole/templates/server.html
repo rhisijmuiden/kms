@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ t('KMS server') }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('KMS server') }}</h1>
+    <p>{{ t('Settings of the py-kms service in this container.') }}</p>
+  </div>
+  {% if alive %}<span class="pill pill-ok"><i></i>{{ t('Server running') }}</span>{% else %}<span class="pill pill-err"><i></i>{{ t('Server not reachable') }}</span>{% endif %}
+  <form method="post" action="{{ url_for('main.server_restart') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">{{ t('Restart server') }}</button></form>
+</header>
+
+<form class="card" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h2>{{ t('Connection') }}</h2>
+  <div class="form-grid">
+    <label class="f w4">{{ t('Address clients use') }}
+      <input type="text" name="public_host" value="{{ s.public_host }}" placeholder="{{ detected }}">
+      <small>{{ t('Hostname or IP in the activation scripts. Leave empty to use the detected IP {ip}.', ip=detected) }}</small></label>
+    <label class="f w2">{{ t('Port') }}<input type="number" name="port" min="1" max="65535" value="{{ s.port }}"><small>{{ t('Default 1688') }}</small></label>
+    <label class="f w2">{{ t('Listen on') }}<input type="text" name="listen" value="{{ s.listen }}"><small>{{ t('0.0.0.0 = all IPv4, :: = IPv4 and IPv6') }}</small></label>
+  </div>
+  <h2>{{ t('Behaviour') }}</h2>
+  <div class="form-grid">
+    <label class="f w2">{{ t('Activation retry (minutes)') }}<input type="number" name="activation_interval" value="{{ s.activation_interval }}"><small>{{ t('Retry after a failed activation. Default 120.') }}</small></label>
+    <label class="f w2">{{ t('Renewal interval (minutes)') }}<input type="number" name="renewal_interval" value="{{ s.renewal_interval }}"><small>{{ t('Default 10080 (7 days).') }}</small></label>
+    <label class="f w2">{{ t('Language code (LCID)') }}<input type="number" name="lcid" value="{{ s.lcid }}"><small>{{ t('1033 = en-US, 1043 = nl-NL') }}</small></label>
+    <label class="f w2">{{ t('Hardware ID') }}<input type="text" name="hwid" value="{{ s.hwid }}"><small>{{ t('RANDOM or 16 hex characters') }}</small></label>
+    <label class="f w2">{{ t('Log level') }}<select name="loglevel">{% for l in ['MININFO', 'INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'] %}<option{% if s.loglevel == l %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="row"><button class="btn btn-primary" type="submit">{{ t('Save and restart') }}</button></div>
+</form>
+
+<div class="grid g2">
+  <form class="card" method="post" action="{{ url_for('main.settings_update') }}" id="updates">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h2>{{ t('Updates') }}</h2>
+    <p class="muted small">{{ t('The console updates itself from git. Production and test each follow their own branch. Switch the channel in the Info window.') }}</p>
+    <div class="form-grid">
+      <label class="f">{{ t('Production branch') }}<input type="text" name="branch_production" value="{{ update_branch_production }}"></label>
+      <label class="f">{{ t('Test branch') }}<input type="text" name="branch_test" value="{{ update_branch_test }}"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="auto_check" {% if update_auto %}checked{% endif %}>{{ t('Check for updates every day and mail me') }}</label>
+    <div class="row"><button class="btn btn-dark" type="submit">{{ t('Save') }}</button><button class="btn" type="button" data-open-info>{{ t('Open Info') }}</button></div>
+  </form>
+  <section class="card">
+    <div class="card-head"><h2>{{ t('Services') }}</h2><a class="btn btn-sm" href="{{ url_for('main.server_logs') }}" target="_blank" rel="noopener">{{ t('Open log') }}</a></div>
+    {% if status %}
+    <dl class="facts">
+      {% for k, v in status.items() %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}
+    </dl>
+    {% else %}
+    <p class="muted small">{{ t('Service status is not available (development mode).') }}</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t('Clients') }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('Clients') }}</h1>
+    <p>{{ t('Every Windows and Office installation that asked this server for a license.') }}</p>
+  </div>
+  <a class="btn" href="{{ url_for('main.clients_csv', q=q, f=f) }}">{{ icon('download') }}{{ t('Export CSV') }}</a>
+</header>
+
+<form class="row" method="get" action="{{ url_for('main.clients') }}" role="search">
+  <label class="search">{{ icon('search') }}<span class="sr">{{ t('Search clients') }}</span>
+    <input type="search" name="q" value="{{ q }}" placeholder="{{ t('Search machine, IP or product') }}"></label>
+  <input type="hidden" name="f" value="{{ f }}">
+  <div class="segmented" role="group" aria-label="{{ t('Filter') }}">
+    {% for key, label, n in [('all', 'All', stats.total), ('windows', 'Windows', stats.windows), ('office', 'Office', stats.office), ('attention', 'Needs attention', stats.attention)] %}
+    <a href="{{ url_for('main.clients', q=q, f=key) }}" class="{{ 'is-on' if f == key }}"{% if f == key %} aria-current="true"{% endif %}>{{ t(label) }} {{ n }}</a>
+    {% endfor %}
+  </div>
+</form>
+
+<section class="table-card">
+  {% if rows %}
+  <table style="min-width:1000px">
+    <thead><tr><th>{{ t('Machine') }}</th><th>{{ t('Product (SKU)') }}</th><th>{{ t('Application') }}</th><th>{{ t('Status') }}</th><th>{{ t('Last seen') }}</th><th>{{ t('Requests') }}</th><th>{{ t('Client ID') }}</th><th><span class="sr">{{ t('Actions') }}</span></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="strong">{{ r.machineName }}<span class="sub mono">{{ r.machineIp or '' }}</span></td>
+        <td>{{ r.skuId }}</td>
+        <td class="muted">{{ r.applicationId }}</td>
+        <td><span class="badge b-{{ r.state }}">{{ t(r.licenseStatus) }}</span></td>
+        <td class="muted" title="{{ r.lastRequestTime|datetime }}">{{ r.lastRequestTime|ago }}</td>
+        <td class="num">{{ r.requestCount }}</td>
+        <td class="mono small muted" title="{{ r.clientMachineId }}{% if r.kmsEpid %} · EPID {{ r.kmsEpid }}{% endif %}">{{ r.clientMachineId[:13] }}…</td>
+        <td class="actions">
+          <form method="post" action="{{ url_for('main.clients_delete') }}" data-confirm="{{ t('Remove this client from the list? It comes back when it activates again.') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="cmid" value="{{ r.clientMachineId }}"><input type="hidden" name="app" value="{{ r.applicationId }}">
+            <button class="btn btn-sm" type="submit" aria-label="{{ t('Remove') }} {{ r.machineName }}">{{ t('Remove') }}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">{% if q or f != 'all' %}{{ t('No clients match your search.') }}{% else %}{{ t('No clients yet. Run an activation script on a Windows PC and it shows up here.') }}{% endif %}</div>
+  {% endif %}
+</section>
+<div class="row muted small">
+  <span style="margin-right:auto">{{ t('Showing {a} to {b} of {n}', a=(page - 1) * 25 + (1 if total else 0), b=[page * 25, total]|min, n=total) }}</span>
+  {% if page > 1 %}<a class="btn btn-sm" href="{{ url_for('main.clients', q=q, f=f, page=page - 1) }}">{{ t('Previous') }}</a>{% endif %}
+  {% if page < pages %}<a class="btn btn-sm" href="{{ url_for('main.clients', q=q, f=f, page=page + 1) }}">{{ t('Next') }}</a>{% endif %}
+</div>
+{% endblock %}

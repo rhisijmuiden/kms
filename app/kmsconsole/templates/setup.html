@@ -1,0 +1,13 @@
+{% extends "_auth.html" %}
+{% block title %}{{ t('Welcome') }}{% endblock %}
+{% block form %}
+<div><h2>{{ t('Welcome') }}</h2><p class="muted small">{{ t('Create the administrator account for this KMS server.') }}</p></div>
+<form method="post" style="display:flex;flex-direction:column;gap:14px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="f">{{ t('Username') }}<input type="text" name="username" value="admin" required autocomplete="username"></label>
+  <label class="f">{{ t('E-mail') }}<input type="email" name="email" autocomplete="email"></label>
+  <label class="f">{{ t('Password') }}<input type="password" name="password" required minlength="10" autocomplete="new-password"><small>{{ t('At least 10 characters') }}</small></label>
+  <label class="f">{{ t('Repeat password') }}<input type="password" name="password2" required minlength="10" autocomplete="new-password"></label>
+  <button class="btn btn-primary" type="submit">{{ t('Create account') }}</button>
+</form>
+{% endblock %}

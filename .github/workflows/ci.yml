@@ -1,0 +1,22 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: py-kms engine
+        run: git clone --depth 1 --branch v1.0.3 https://github.com/11notes/fork-py-kms.git /tmp/py-kms
+      - name: Install
+        run: pip install -r app/requirements.txt pytest pyftpdlib pyopenssl
+      - name: Tests
+        env:
+          KMS_PYKMS_DIR: /tmp/py-kms/py-kms
+        run: python -m pytest -q tests
+      - name: Shellcheck
+        run: shellcheck -S warning lxc/install.sh lxc/kms-ctl lxc/proxmox-create.sh

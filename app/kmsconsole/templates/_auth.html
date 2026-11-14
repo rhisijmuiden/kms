@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %} · KMS Console</title>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}"></head>
+<body>
+<main class="auth">
+  <div class="auth-card">
+    <div class="auth-brand"><img src="{{ url_for('static', filename='img/icon.svg') }}" alt=""><div><h1 style="font-size:22px">KMS Console</h1><span class="muted small">v{{ app_version }}</span></div></div>
+    {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash flash-{{ cat }}" role="status">{{ msg }}</div>{% endfor %}{% endwith %}
+    {% block form %}{% endblock %}
+    <div class="lang" style="background:var(--mist)">
+      {% for code, name in languages.items() %}<form method="post" action="{{ url_for('main.set_lang', code=code) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" aria-pressed="{{ 'true' if lang == code else 'false' }}" style="color:var(--ink)">{{ name }}</button></form>{% endfor %}
+    </div>
+  </div>
+</main>
+</body></html>

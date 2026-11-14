@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t('Products & keys') }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('Products & keys') }}</h1>
+    <p style="max-width:75ch">{{ t('All products this server can activate, with the public volume key (GVLK) published by Microsoft.') }}</p>
+  </div>
+</header>
+<form class="row" method="get" role="search">
+  <label class="search">{{ icon('search') }}<span class="sr">{{ t('Search products') }}</span><input type="search" name="q" value="{{ q }}" placeholder="{{ t('Search product, for example Server 2025') }}"></label>
+</form>
+{% for grp in groups %}
+<section class="card" style="gap:10px">
+  <div class="card-head"><h2>{{ grp.name }}</h2><span class="badge b-neutral">{{ 'Office' if grp.kind == 'office' else 'Windows' }}</span>{% if grp.retail %}<span class="badge b-pending">{{ t('Retail keys, cannot use KMS') }}</span>{% endif %}</div>
+  <div class="table-wrap"><table style="min-width:620px">
+    <thead><tr><th>{{ t('Product') }}</th><th>GVLK</th><th><span class="sr">{{ t('Actions') }}</span></th></tr></thead>
+    <tbody>{% for s in grp.skus %}
+      <tr><td class="strong">{{ s.name }}</td><td class="mono" id="k-{{ s.id }}">{{ s.gvlk }}</td>
+        <td class="actions"><button type="button" class="btn btn-sm" data-copy="#k-{{ s.id }}">{{ t('Copy') }}</button>
+        {% if not grp.retail %}<a class="btn btn-sm" href="{{ url_for('main.activation', tab=grp.kind, sku=s.id) }}">{{ t('Script') }}</a>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% else %}
+<div class="card empty">{{ t('No products found.') }}</div>
+{% endfor %}
+{% endblock %}

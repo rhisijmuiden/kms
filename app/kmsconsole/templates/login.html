@@ -1,0 +1,11 @@
+{% extends "_auth.html" %}
+{% block title %}{{ t('Sign in') }}{% endblock %}
+{% block form %}
+<form method="post" style="display:flex;flex-direction:column;gap:14px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="f">{{ t('Username') }}<input type="text" name="username" required autofocus autocomplete="username"></label>
+  <label class="f">{{ t('Password') }}<input type="password" name="password" required autocomplete="current-password"></label>
+  <button class="btn btn-primary" type="submit">{{ t('Sign in') }}</button>
+  <p class="hint">{{ t('Forgot your password? Run kms-ctl reset-password on the container.') }}</p>
+</form>
+{% endblock %}
