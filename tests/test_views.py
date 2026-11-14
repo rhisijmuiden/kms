@@ -66,3 +66,13 @@ def test_dutch_translation_complete():
         if key not in nl:
             missing.add(key)
     assert not missing, sorted(missing)
+
+
+def test_dns_domain_from_ip_and_hostname(client):
+    from kmsconsole import store
+    store.set("kms.public_host", "10.10.4.113")
+    page = client.get("/activation?tab=dns").get_data(as_text=True)
+    assert "_vlmcs._tcp.lan" in page and "kms.lan" in page and "UniFi" in page
+    store.set("kms.public_host", "kms.home.lan")
+    page = client.get("/activation?tab=dns").get_data(as_text=True)
+    assert "_vlmcs._tcp.home.lan" in page

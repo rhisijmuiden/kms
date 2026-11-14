@@ -194,9 +194,17 @@ def clients_delete():
     return redirect(url_for("main.clients"))
 
 
+def _dns_domain():
+    """DNS suffix of the configured hostname (kms.example.lan -> example.lan); 'lan' when an IP is used."""
+    host = (store.get("kms.public_host") or "").strip()
+    if not host or re.match(r"^[0-9.]+$", host) or ":" in host:
+        return "lan"
+    return host.partition(".")[2] or "lan"
+
+
 def _script_args(kind, sku_id):
     sku = kms.find_sku(sku_id) if sku_id else None
-    domain = (store.get("kms.public_host") or "").partition(".")[2] or "lan"
+    domain = _dns_domain()
     return {
         "host": kms.public_host(),
         "port": store.get("kms.port"),
@@ -232,7 +240,8 @@ def activation():
     code = scripts.generate(kind, **args)
     return render_template("activation.html", active="activation", tab=tab, fmt=fmt, kind=kind, code=code,
                            filename=scripts.FILENAMES[kind], groups=groups, sku_id=sku_id, host=args["host"],
-                           port=args["port"], key=args["key"], product=args["product"])
+                           port=args["port"], key=args["key"], product=args["product"], domain=args["domain"],
+                           host_is_ip=bool(re.match(r"^[0-9.]+$", args["host"]) or ":" in args["host"]))
 
 
 @bp.route("/activation/download/<kind>")

@@ -60,6 +60,36 @@
   </div>
 </section>
 
+{% if tab == 'dns' %}
+{% set target = ('kms.' ~ domain) if host_is_ip else host %}
+<section class="card" id="unifi">
+  <div class="card-head"><h2>{{ t('Set it up on a UniFi Gateway') }}</h2><span class="badge b-neutral">UniFi Network 8.2+</span></div>
+  <p class="muted small">{{ t('UniFi gateways (UDM, UCG, UXG, Cloud Key with gateway) can serve the SRV record themselves. Clients must use the gateway as DNS server, which is the default.') }}</p>
+  <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:14px;font-size:14px">
+    <li><strong>{{ t('Open the DNS records') }}</strong><br>
+      <span class="muted">{{ t('Network 9.4 and newer:') }}</span> <span class="kbd">Settings › Policy Table › Create New Policy › DNS</span><br>
+      <span class="muted">{{ t('Network 9.3:') }}</span> <span class="kbd">Settings › Policy Engine › DNS</span><br>
+      <span class="muted">{{ t('Network 8.2 to 9.2:') }}</span> <span class="kbd">Settings › Routing › DNS › Create Entry</span></li>
+    <li><strong>{{ t('Give the KMS container a name') }}</strong> ({{ t('type') }} <span class="kbd">Host (A)</span>)<br>
+      {{ t('Domain name') }} <span class="kbd">{{ target }}</span> · {{ t('IP address') }} <span class="kbd">{{ host if host_is_ip else t('IP of this container') }}</span><br>
+      <span class="muted small">{{ t('An SRV record must point to a name, not to an IP address. Skip this step when the name already resolves.') }}</span></li>
+    <li><strong>{{ t('Add the SRV record') }}</strong> ({{ t('type') }} <span class="kbd">Service (SRV)</span>)<br>
+      {{ t('Domain name') }} <span class="kbd">_vlmcs._tcp.{{ domain }}</span> · {{ t('Target') }} <span class="kbd">{{ target }}</span> · {{ t('Port') }} <span class="kbd">{{ port }}</span> · {{ t('Priority') }} <span class="kbd">0</span> · {{ t('Weight') }} <span class="kbd">0</span><br>
+      <span class="muted small">{{ t('Some versions ask for service and protocol separately: use _vlmcs and _tcp with domain {domain}.', domain=domain) }}</span></li>
+    <li><strong>{{ t('Check the domain name of the network') }}</strong><br>
+      <span class="kbd">Settings › Networks › {{ t('your network') }} › DHCP › Domain Name</span> = <span class="kbd">{{ domain }}</span><br>
+      <span class="muted small">{{ t('Windows looks up _vlmcs._tcp in this DNS suffix. Run ipconfig /renew on a client after changing it.') }}</span></li>
+    <li><strong>{{ t('Test on a Windows client') }}</strong>
+      <pre class="code-inline" style="background:var(--abyss);margin-top:8px" id="unifi-test">nslookup -type=srv _vlmcs._tcp.{{ domain }}
+slmgr /ckms
+slmgr /ato</pre>
+      <span class="muted small">{{ t('slmgr /ckms removes a manually set KMS server, so the client uses DNS again.') }}</span></li>
+  </ol>
+  <div class="callout callout-info">{{ t('Older than Network 8.2, or no SRV option? Update the UniFi Network application, or use Forward Domain to send the domain to a DNS server that supports SRV (Pi-hole, Windows DNS). The GPO / registry tab works without DNS.') }}</div>
+  <p class="muted small">{{ t('The domain {domain} comes from the address under KMS server. Set a hostname there (for example kms.home.lan) to change it.', domain=domain) }}</p>
+</section>
+{% endif %}
+
 <div class="grid g2">
   <section class="card">
     <h2>{{ t('Check the activation on a client') }}</h2>

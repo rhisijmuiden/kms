@@ -150,17 +150,24 @@ foreach ($k in @($win, $off)) {{
 """)
 
     if kind == "dns":
+        is_ip = bool(re.match(r"^[0-9.]+$", host)) or ":" in host
+        target = f"kms.{domain}" if is_ip else host
+        a_record = (f"{target}.  3600 IN {'AAAA' if ':' in host else 'A'}  {host}\n" if is_ip else "")
+        a_note = (f"; An SRV record must point to a hostname, so also create {target} -> {host}\n" if is_ip else "")
         return f"""; KMS Console - DNS auto discovery
-; Clients without a configured KMS server look up _vlmcs._tcp in their DNS suffix.
-
-; BIND / Pi-hole (dnsmasq) / pfSense / OPNsense
-_vlmcs._tcp.{domain}.  3600 IN SRV 0 0 {port} {host}.
-
+; Clients without a configured KMS server look up _vlmcs._tcp in their DNS suffix ({domain}).
+{a_note}
+; BIND / Pi-hole / pfSense / OPNsense
+_vlmcs._tcp.{domain}.  3600 IN SRV 0 0 {port} {target}.
+{a_record}
 ; dnsmasq one-liner
-srv-host=_vlmcs._tcp.{domain},{host},{port},0,0
+srv-host=_vlmcs._tcp.{domain},{target},{port},0,0
+
+; UniFi Gateway (Network 8.2+): Settings > Policy Table > Create New Policy > DNS, type Service (SRV)
+;   Name: _vlmcs._tcp.{domain}   Target: {target}   Port: {port}   Priority: 0   Weight: 0
 
 # Windows DNS server (PowerShell)
-Add-DnsServerResourceRecord -ZoneName "{domain}" -Srv -Name "_vlmcs._tcp" -DomainName "{host}" -Priority 0 -Weight 0 -Port {port}
+Add-DnsServerResourceRecord -ZoneName "{domain}" -Srv -Name "_vlmcs._tcp" -DomainName "{target}" -Priority 0 -Weight 0 -Port {port}
 """
 
     if kind == "status":

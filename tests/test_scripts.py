@@ -42,3 +42,15 @@ def test_rejects_bad_host(host):
 def test_rejects_bad_key():
     with pytest.raises(ValueError):
         scripts.generate("windows-cmd", host="kms.lan", port=1688, key="AAAA & calc")
+
+
+def test_dns_with_ip_uses_hostname_target():
+    out = scripts.generate("dns", host="10.10.4.113", port=1688, domain="home.lan")
+    assert "_vlmcs._tcp.home.lan.  3600 IN SRV 0 0 1688 kms.home.lan." in out
+    assert "kms.home.lan.  3600 IN A  10.10.4.113" in out
+    assert "UniFi" in out
+
+
+def test_dns_with_hostname():
+    out = scripts.generate("dns", host="kms.home.lan", port=1688, domain="home.lan")
+    assert "SRV 0 0 1688 kms.home.lan." in out and "IN A" not in out
