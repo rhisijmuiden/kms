@@ -3,7 +3,8 @@ import re
 from pathlib import Path
 
 PAGES = ["/", "/clients", "/clients?f=office&q=pc", "/activation", "/activation?tab=office&fmt=ps1", "/activation?tab=gpo",
-         "/activation?tab=gpo&fmt=ps1", "/activation?tab=dns", "/products", "/server", "/mail", "/backups", "/users"]
+         "/activation?tab=gpo&fmt=ps1", "/activation?tab=dns", "/activation?tab=eval",
+         "/activation?tab=eval&fmt=cmd&target=ServerDatacenter", "/products", "/server", "/mail", "/backups", "/users"]
 
 
 def test_pages_render(client):
@@ -76,3 +77,11 @@ def test_dns_domain_from_ip_and_hostname(client):
     store.set("kms.public_host", "kms.home.lan")
     page = client.get("/activation?tab=dns").get_data(as_text=True)
     assert "_vlmcs._tcp.home.lan" in page
+
+
+def test_eval_download_keeps_target(client):
+    r = client.get("/activation/download/eval-cmd?target=ServerDatacenter")
+    assert r.status_code == 200
+    assert b'set "TARGET=ServerDatacenter"' in r.data
+    page = client.get("/activation?tab=eval").get_data(as_text=True)
+    assert "convert-eval-and-activate.ps1" in page and "DISM" in page

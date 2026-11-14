@@ -202,8 +202,13 @@ def _dns_domain():
     return host.partition(".")[2] or "lan"
 
 
+def _eval_target():
+    target = request.args.get("target", "auto")
+    return target if target in scripts.EVAL_TARGETS else "auto"
+
+
 def _script_args(kind, sku_id):
-    sku = kms.find_sku(sku_id) if sku_id else None
+    sku = kms.find_sku(sku_id) if sku_id and not kind.startswith("eval-") else None
     domain = _dns_domain()
     return {
         "host": kms.public_host(),
@@ -212,6 +217,7 @@ def _script_args(kind, sku_id):
         "product": sku["name"] if sku else "",
         "office_dir": kms.office_version(sku["group"]) if sku and sku["kind"] == "office" else "Office16",
         "domain": domain,
+        "target": _eval_target(),
     }
 
 
@@ -219,7 +225,7 @@ def _script_args(kind, sku_id):
 @login_required
 def activation():
     tab = request.args.get("tab", "windows")
-    if tab not in ("windows", "office", "gpo", "dns"):
+    if tab not in ("windows", "eval", "office", "gpo", "dns"):
         tab = "windows"
     catalog = kms.catalog()
     kind_for_tab = "office" if tab == "office" else "windows"
@@ -231,8 +237,11 @@ def activation():
             for s in grp["skus"]:
                 if s["name"] == preferred:
                     sku_id = s["id"]
-    fmt = request.args.get("fmt", "cmd")
-    if tab in ("windows", "office"):
+    fmt = request.args.get("fmt", "ps1" if tab == "eval" else "cmd")
+    if tab == "eval":
+        sku_id = ""
+        kind = f"eval-{'ps1' if fmt == 'ps1' else 'cmd'}"
+    elif tab in ("windows", "office"):
         kind = f"{tab}-{'ps1' if fmt == 'ps1' else 'cmd'}"
     else:
         kind = {"gpo": "reg" if fmt != "ps1" else "gpo", "dns": "dns"}[tab]
@@ -241,6 +250,8 @@ def activation():
     return render_template("activation.html", active="activation", tab=tab, fmt=fmt, kind=kind, code=code,
                            filename=scripts.FILENAMES[kind], groups=groups, sku_id=sku_id, host=args["host"],
                            port=args["port"], key=args["key"], product=args["product"], domain=args["domain"],
+                           target=args["target"], eval_targets=scripts.EVAL_TARGETS,
+                           server_versions=[v[0] for v in scripts.SERVER_GVLK.values()],
                            host_is_ip=bool(re.match(r"^[0-9.]+$", args["host"]) or ":" in args["host"]))
 
 
