@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Privileged helper for KMS Console. Installed root-owned in /usr/local/sbin and
+# the only command the web GUI (user kms) may run through sudo.
+set -euo pipefail
+
+APP_DIR=/opt/kms-console
+VENV=/opt/kms-venv
+LOG=/var/log/kms-console-update.log
+BRANCH_RE='^[A-Za-z0-9._/-]{1,100}$'
+
+die() { echo "$*" >&2; exit 1; }
+need_branch() { [[ "${1:-}" =~ $BRANCH_RE ]] && [[ "$1" != *..* ]] || die "invalid branch name"; }
+json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  restart-server)
+    systemctl restart kms-server.service
+    sleep 1
+    systemctl is-active --quiet kms-server.service || die "kms-server failed to start: $(journalctl -u kms-server -n 5 --no-pager -o cat | tail -n 3)"
+    echo ok
+    ;;
+
+  restart-console)
+    systemd-run --quiet --on-active=2 --unit="kms-console-restart-$(date +%s)" systemctl restart kms-console.service
+    echo ok
+    ;;
+
+  status)
+    . /etc/os-release
+    printf '{"kms-server": %s, "kms-console": %s, "os": %s, "hostname": %s, "ip": %s, "uptime": %s, "commit": %s, "branch": %s}\n' \
+      "$(json_str "$(systemctl is-active kms-server.service || true)")" \
+      "$(json_str "$(systemctl is-active kms-console.service || true)")" \
+      "$(json_str "$PRETTY_NAME")" "$(json_str "$(hostname -f 2>/dev/null || hostname)")" \
+      "$(json_str "$(hostname -I | awk '{print $1}')")" "$(json_str "$(uptime -p)")" \
+      "$(json_str "$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo -)")" \
+      "$(json_str "$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo -)")"
+    ;;
+
+  logs)
+    n="${1:-200}"; [[ "$n" =~ ^[0-9]{1,4}$ ]] || n=200
+    journalctl -u kms-server.service -n "$n" --no-pager -o short-iso | sed 's/\x1b\[[0-9;]*m//g'
+    ;;
+
+  check)
+    branch="${1:-}"; need_branch "$branch"
+    git -C "$APP_DIR" fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null \
+      || die "branch '$branch' not found on $(git -C "$APP_DIR" remote get-url origin)"
+    printf '{"local_commit": %s, "local_branch": %s, "remote_commit": %s, "remote_version": %s, "remote_date": %s, "remote_subject": %s}\n' \
+      "$(json_str "$(git -C "$APP_DIR" rev-parse HEAD)")" \
+      "$(json_str "$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)")" \
+      "$(json_str "$(git -C "$APP_DIR" rev-parse "origin/$branch")")" \
+      "$(json_str "$(git -C "$APP_DIR" show "origin/$branch:VERSION" 2>/dev/null | head -n1 || echo unknown)")" \
+      "$(json_str "$(git -C "$APP_DIR" log -1 --format=%cI "origin/$branch")")" \
+      "$(json_str "$(git -C "$APP_DIR" log -1 --format=%s "origin/$branch")")"
+    ;;
+
+  update)
+    branch="${1:-}"; need_branch "$branch"
+    : > "$LOG"
+    # Run detached so the update survives the restart of the web GUI that started it.
+    systemd-run --quiet --unit="kms-console-update-$(date +%s)" --collect /usr/local/sbin/kms-ctl _do-update "$branch"
+    echo "started"
+    ;;
+
+  _do-update)
+    branch="${1:-}"; need_branch "$branch"
+    exec >>"$LOG" 2>&1
+    echo "[$(date -Is)] Update to branch $branch"
+    if (
+      set -e
+      git -C "$APP_DIR" fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch"
+      # Refuse branches that do not contain KMS Console (for example the old Docker-only master)
+      git -C "$APP_DIR" cat-file -e "origin/$branch:lxc/install.sh" 2>/dev/null \
+        || { echo "Branch $branch does not contain KMS Console (lxc/install.sh missing). Nothing changed."; exit 1; }
+      git -C "$APP_DIR" checkout -B "$branch" "origin/$branch"
+      git -C "$APP_DIR" reset --hard "origin/$branch"
+      echo "Now at $(cat "$APP_DIR/VERSION") ($(git -C "$APP_DIR" rev-parse --short HEAD))"
+      bash "$APP_DIR/lxc/install.sh" --upgrade
+    ); then
+      echo "[$(date -Is)] UPDATE DONE"
+    else
+      echo "[$(date -Is)] UPDATE FAILED"
+      exit 1
+    fi
+    ;;
+
+  update-log)
+    [[ -f "$LOG" ]] && tail -n 200 "$LOG" || echo "No update has run yet."
+    ;;
+
+  reset-password)
+    user="${1:-admin}"
+    [[ "$user" =~ ^[A-Za-z0-9._@-]{3,64}$ ]] || die "invalid username"
+    pw="$(python3 -c 'import secrets; print(secrets.token_urlsafe(12))')"
+    sudo -u kms env KMS_CONSOLE_ROOT="$APP_DIR" PYTHONPATH="$APP_DIR/app" "$VENV/bin/python" - "$user" "$pw" <<'EOF'
+import sys, time
+from werkzeug.security import generate_password_hash
+from kmsconsole import store
+store.init()
+user, pw = sys.argv[1], sys.argv[2]
+with store.connect() as con:
+    cur = con.execute("UPDATE users SET password_hash=? WHERE username=?", (generate_password_hash(pw), user))
+    if cur.rowcount == 0:
+        con.execute("INSERT INTO users(username, password_hash, email, lang, created) VALUES(?,?,?,?,?)",
+                    (user, generate_password_hash(pw), "", "en", int(time.time())))
+EOF
+    echo "New password for $user: $pw"
+    ;;
+
+  *)
+    cat >&2 <<EOF
+usage: kms-ctl <command>
+  status                 service status as JSON
+  restart-server         restart the KMS server
+  restart-console        restart the web GUI
+  logs [lines]           KMS server log
+  check <branch>         compare installed version with a branch
+  update <branch>        update KMS Console to a branch (runs in the background)
+  update-log             output of the last update
+  reset-password [user]  set a new random password (creates the user when missing)
+EOF
+    exit 2
+    ;;
+esac

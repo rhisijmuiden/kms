@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t('Activation guide') }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('Activation guide') }}</h1>
+    <p style="max-width:75ch">{{ t('Pick what you want to activate. The scripts below already point to this container, so you can download them and run them as administrator on the client.') }}</p>
+  </div>
+</header>
+
+<section class="grid g3">
+  <div class="step"><span class="n">1</span><strong>{{ t('Install the volume key') }}</strong><p>{{ t('Each edition has a public GVLK from Microsoft. The script sets it for you.') }}</p></div>
+  <div class="step"><span class="n">2</span><strong>{{ t('Point to this server') }}</strong><p>{{ t('Clients connect to {host} on TCP port {port}. Keep it inside your LAN.', host=host, port=port) }}</p></div>
+  <div class="step"><span class="n">3</span><strong>{{ t('Activate') }}</strong><p>{{ t('Clients renew by themselves every 7 days. A license lasts 180 days.') }}</p></div>
+</section>
+
+<section class="card">
+  <form class="row" method="get" action="{{ url_for('main.activation') }}">
+    <div class="segmented" role="tablist" aria-label="{{ t('Script type') }}">
+      {% for key, label in [('windows', 'Windows'), ('office', 'Office'), ('gpo', 'GPO / registry'), ('dns', 'DNS (auto discovery)')] %}
+      <a role="tab" aria-selected="{{ 'true' if tab == key else 'false' }}" class="{{ 'is-on' if tab == key }}" href="{{ url_for('main.activation', tab=key, fmt=fmt) }}">{{ t(label) }}</a>
+      {% endfor %}
+    </div>
+    <input type="hidden" name="tab" value="{{ tab }}">
+    {% if tab in ('windows', 'office') %}
+    <label class="f" style="grid-column:auto;flex:1 1 280px;flex-direction:row;align-items:center;gap:10px;margin-left:auto">{{ t('Product') }}
+      <select name="sku" data-autosubmit style="flex:1">
+        <option value="none"{% if sku_id == 'none' %} selected{% endif %}>{{ t('Keep the current key (only set the server)') }}</option>
+        {% for grp in groups %}
+        <optgroup label="{{ grp.name }}">{% for s in grp.skus %}<option value="{{ s.id }}"{% if s.id == sku_id %} selected{% endif %}>{{ s.name }}</option>{% endfor %}</optgroup>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    {% if tab != 'dns' %}
+    <div class="segmented" role="group" aria-label="{{ t('Format') }}">
+      <a class="{{ 'is-on' if fmt != 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, fmt='cmd') }}">{{ '.cmd' if tab != 'gpo' else '.reg' }}</a>
+      <a class="{{ 'is-on' if fmt == 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, fmt='ps1') }}">{{ 'PowerShell' if tab != 'gpo' else 'GPO (PowerShell)' }}</a>
+    </div>
+    {% endif %}
+    <noscript><button class="btn" type="submit">{{ t('Show') }}</button></noscript>
+  </form>
+
+  <p class="muted small">
+    {% if tab == 'windows' %}{{ t('Run this file as administrator. It installs the key, sets the KMS server and activates.') }}
+    {% elif tab == 'office' %}{{ t('Works for Office 2010 to LTSC 2024 volume license editions. The script finds OSPP.VBS by itself, then sets the server and activates.') }}
+    {% elif tab == 'gpo' %}{{ t('Import on one PC, or roll out the same values to every PC with a Group Policy.') }}
+    {% else %}{{ t('With this SRV record, clients find the server by themselves. No script needed, only the volume key.') }}{% endif %}
+    {% if key %}<br>{{ t('Volume key for {product}:', product=product) }} <span class="kbd">{{ key }}</span>{% endif %}
+  </p>
+
+  <div class="code">
+    <div class="code-head">
+      <span class="fname">{{ filename }}</span>
+      <button type="button" class="btn btn-sm btn-ghost-dark" data-copy="#script-code">{{ t('Copy') }}</button>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('main.activation_download', kind=kind, sku=sku_id) }}">{{ icon('download') }}{{ t('Download') }}</a>
+    </div>
+    <pre id="script-code">{{ code }}</pre>
+  </div>
+</section>
+
+<div class="grid g2">
+  <section class="card">
+    <h2>{{ t('Check the activation on a client') }}</h2>
+    <pre class="code-inline" style="background:var(--abyss)" id="check-cmds">slmgr /dlv
+cscript "%ProgramFiles%\Microsoft Office\Office16\OSPP.VBS" /dstatus</pre>
+    <div class="row"><button type="button" class="btn btn-sm" data-copy="#check-cmds">{{ t('Copy') }}</button><a class="btn btn-sm" href="{{ url_for('main.activation_download', kind='status') }}">{{ t('Download status script') }}</a></div>
+  </section>
+  <section class="card">
+    <h2>{{ t('Good to know') }}</h2>
+    <ul class="muted" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+      <li>{{ t('Only volume license (VL) editions of Office can use KMS. Retail Office (Microsoft 365, Home & Business) cannot.') }}</li>
+      <li>{{ t('Windows Home is not meant for KMS. Use Pro, Enterprise or Education.') }}</li>
+      <li>{{ t('Never expose port {port} to the internet. Keep the container inside your own network.', port=port) }}</li>
+      <li>{{ t('Error 0xC004F074 means the client cannot reach the server: check the IP, firewall and port.') }}</li>
+    </ul>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+[Unit]
+Description=KMS Console web GUI
+Documentation=https://github.com/rhisijmuiden/kms
+After=network-online.target kms-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kms
+Group=kms
+Environment=KMS_CONSOLE_ROOT=/opt/kms-console
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/kms-console/console.env
+WorkingDirectory=/opt/kms-console/app
+ExecStart=/opt/kms-venv/bin/python wsgi.py
+Restart=always
+RestartSec=3
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+# No NoNewPrivileges/ProtectSystem here: the console calls kms-ctl through sudo for updates.
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

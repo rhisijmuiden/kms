@@ -1,0 +1,12 @@
+/* KMS Console design tokens. Single source for the web GUI (copied to app/kmsconsole/static/css). */
+:root{
+  --abyss:#0B1F24; --abyss-2:#12303A; --abyss-line:#1F4450; --abyss-muted:#8FA5AB; --abyss-text:#C9D6D9;
+  --lagoon:#0E9F8E; --lagoon-hover:#12B5A2; --lagoon-text:#0B7F72; --lagoon-deep:#075E55; --on-lagoon:#04201C;
+  --mint:#7FE3D4; --amber:#F5B83D;
+  --ink:#0F2027; --slate:#52646B; --ink-2:#3C4E55; --mist:#F3F6F7; --raised:#FFFFFF; --line:#DDE5E7; --line-soft:#EEF2F3;
+  --ok-bg:#E3F5EC; --ok:#11643A; --warn-bg:#FFF1D6; --warn:#7A4D00; --err-bg:#FDE8E8; --err:#9B1C1C; --info-bg:#E1F1F0;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-head:"Manrope","Inter",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+  --r-sm:8px; --r-md:10px; --r-lg:16px; --r-xl:20px;
+}

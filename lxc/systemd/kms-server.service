@@ -1,0 +1,26 @@
+[Unit]
+Description=KMS server (py-kms)
+Documentation=https://github.com/rhisijmuiden/kms
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kms
+Group=kms
+EnvironmentFile=/etc/kms-console/kms.env
+WorkingDirectory=/opt/py-kms/py-kms
+ExecStart=/opt/kms-venv/bin/python pykms_Server.py ${KMS_LISTEN} ${KMS_PORT} -l ${KMS_LCID} -a ${KMS_ACTIVATION_INTERVAL} -r ${KMS_RENEWAL_INTERVAL} -s ${KMS_DB} -w ${KMS_HWID} -V ${KMS_LOGLEVEL} -F STDOUT
+Restart=always
+RestartSec=3
+# allows a port below 1024 when configured
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kms
+
+[Install]
+WantedBy=multi-user.target

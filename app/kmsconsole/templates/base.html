@@ -1,0 +1,106 @@
+{% from "_icons.html" import icon %}<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>{% block title %}{% endblock %} · KMS Console</title>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
+</head>
+<body>
+{% set nav_main = [('dashboard', 'Dashboard', url_for('main.dashboard')), ('clients', 'Clients', url_for('main.clients')), ('activation', 'Activation guide', url_for('main.activation')), ('products', 'Products & keys', url_for('main.products'))] %}
+{% set nav_system = [('server', 'KMS server', url_for('main.server')), ('mail', 'Mail server', url_for('main.mail')), ('backups', 'Backups', url_for('main.backups')), ('users', 'Users', url_for('main.users'))] %}
+<div class="shell">
+  <nav class="side" aria-label="{{ t('Main menu') }}">
+    <div class="side-top">
+      <a class="brand" href="{{ url_for('main.dashboard') }}">
+        <img src="{{ url_for('static', filename='img/icon.svg') }}" alt="">
+        <span class="brand-name"><strong>KMS Console</strong><span>{{ request.host.split(':')[0] }}</span></span>
+      </a>
+      <button type="button" class="menu-toggle" aria-expanded="false" aria-label="{{ t('Menu') }}">{{ icon('menu') }}</button>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">{{ t('Overview') }}</span>
+      {% for id, label, href in nav_main %}
+      <a class="nav-item{% if active == id %} is-active{% endif %}" href="{{ href }}"{% if active == id %} aria-current="page"{% endif %}>{{ icon(id) }}<span>{{ t(label) }}</span></a>
+      {% endfor %}
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">{{ t('System') }}</span>
+      {% for id, label, href in nav_system %}
+      <a class="nav-item{% if active == id %} is-active{% endif %}" href="{{ href }}"{% if active == id %} aria-current="page"{% endif %}>{{ icon(id) }}<span>{{ t(label) }}</span></a>
+      {% endfor %}
+    </div>
+    <div class="side-foot">
+      <div class="lang" role="group" aria-label="{{ t('Language') }}">
+        {% for code, name in languages.items() %}
+        <form method="post" action="{{ url_for('main.set_lang', code=code) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" aria-pressed="{{ 'true' if lang == code else 'false' }}">{{ name }}</button></form>
+        {% endfor %}
+      </div>
+      <button type="button" class="info-btn" data-open-info>
+        <span style="color:var(--mint);display:flex">{{ icon('info') }}</span>
+        <span>{{ t('Info & updates') }}<small>v{{ app_version }} · {{ t(update_channel) }}</small></span>
+        {% if update_info.get('available') %}<span class="badge-new">{{ t('1 new') }}</span>{% endif %}
+      </button>
+      <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="logout" type="submit">{{ t('Sign out') }} · {{ g.user.username }}</button></form>
+    </div>
+  </nav>
+
+  <main class="content" id="main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash flash-{{ cat }}" role="status">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<dialog id="info-dialog" aria-label="{{ t('About KMS Console') }}" data-channel="{{ update_channel }}">
+  <div class="dlg">
+    <div class="dlg-head">
+      <img src="{{ url_for('static', filename='img/icon.svg') }}" alt="">
+      <div><h2 style="font-size:20px">KMS Console</h2><span class="muted small">{{ t('Installed version') }} {{ app_version }}</span></div>
+      <button type="button" class="x" aria-label="{{ t('Close') }}">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <span class="small muted" style="font-weight:600">{{ t('Update channel') }}</span>
+      <div class="segmented" role="group" aria-label="{{ t('Update channel') }}" style="display:flex">
+        <button type="button" data-channel="production" style="flex:1;justify-content:center">{{ t('Production') }}</button>
+        <button type="button" data-channel="test" style="flex:1;justify-content:center">{{ t('Test') }}</button>
+      </div>
+      <span class="small muted" data-channel-hint></span>
+    </div>
+    <div class="update-box">
+      <div class="txt"><strong data-update-title>{{ t('Checking for updates...') }}</strong><span data-update-sub></span></div>
+      <button type="button" class="btn btn-primary" data-update-start hidden>{{ t('Update now') }}</button>
+    </div>
+    <pre class="log" hidden></pre>
+    <dl class="facts">
+      <dt>{{ t('Installed') }}</dt><dd data-local>{{ app_version }}</dd>
+      <dt>{{ t('py-kms engine') }}</dt><dd>{{ pykms_version|default('1.0.3') }}</dd>
+      <dt>{{ t('Container') }}</dt><dd>LXC</dd>
+      <dt>{{ t('Last update check') }}</dt><dd data-checked>-</dd>
+    </dl>
+    <div class="row">
+      <button type="button" class="btn" data-update-check>{{ t('Check again') }}</button>
+      <a class="btn" href="{{ url_for('main.server') }}#updates">{{ t('Update settings') }}</a>
+    </div>
+  </div>
+</dialog>
+
+<script>
+window.KMS_T = {{ {
+  'Copied': t('Copied'), 'Stable releases from the production branch.': t('Stable releases from the production branch.'),
+  'Newest features from the test branch. May contain bugs.': t('Newest features from the test branch. May contain bugs.'),
+  'Switch to {branch}': t('Switch to {branch}'), 'Version {v} is available': t('Version {v} is available'), 'Commit': t('Commit'),
+  'A backup is made automatically before updating.': t('A backup is made automatically before updating.'),
+  'You are up to date': t('You are up to date'), 'Checking for updates...': t('Checking for updates...'),
+  'Update check failed': t('Update check failed'), 'Making a backup and starting the update...': t('Making a backup and starting the update...'),
+  'Connecting...': t('Connecting...'), 'Loading...': t('Loading...'), 'No backups found on the remote location.': t('No backups found on the remote location.'),
+  'Full': t('Full'), 'Incremental': t('Incremental')
+}|tojson }};
+window.KMS_UPDATE = {{ update_info|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
+</body>
+</html>

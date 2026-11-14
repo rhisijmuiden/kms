@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t('Dashboard') }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('Dashboard') }}</h1>
+    <p>{{ t('Your KMS server at a glance. Clients activate against') }} <strong class="mono" style="color:var(--ink)">{{ host }}:{{ port }}</strong>.</p>
+  </div>
+  {% if alive %}<span class="pill pill-ok"><i></i>{{ t('Server running') }}</span>{% else %}<span class="pill pill-err"><i></i>{{ t('Server not reachable') }}</span>{% endif %}
+  <button type="button" class="btn" data-open-info>{{ t('Check for updates') }}</button>
+  <a class="btn btn-primary" href="{{ url_for('main.activation') }}">{{ t('Get activation script') }}</a>
+</header>
+
+<section class="grid g4" aria-label="{{ t('Statistics') }}">
+  <div class="stat"><span class="label">{{ t('Activated clients') }}</span><span class="value">{{ stats.total }}</span><span class="sub">{{ t('{n} new this week', n=stats.new_week) }}</span></div>
+  <div class="stat"><span class="label">Windows</span><span class="value">{{ stats.windows }}</span><span class="sub">{{ t('{n} different products', n=stats.products) }}</span></div>
+  <div class="stat"><span class="label">Office</span><span class="value">{{ stats.office }}</span><span class="sub">{{ t('Volume license editions') }}</span></div>
+  <div class="stat"><span class="label">{{ t('Seen today') }}</span><span class="value">{{ stats.seen_today }}</span><span class="sub">{% if stats.attention %}{{ t('{n} need attention', n=stats.attention) }}{% else %}{{ t('Everything looks fine') }}{% endif %}</span></div>
+</section>
+
+<div class="grid g3">
+  <section class="card span2">
+    <div class="card-head"><h2>{{ t('Recent activations') }}</h2><a href="{{ url_for('main.clients') }}" style="font-weight:600;font-size:14px">{{ t('View all clients') }}</a></div>
+    {% if recent %}
+    <div class="table-wrap">
+      <table style="min-width:560px">
+        <thead><tr><th>{{ t('Machine') }}</th><th>{{ t('Product') }}</th><th>{{ t('Status') }}</th><th>{{ t('Last seen') }}</th></tr></thead>
+        <tbody>
+        {% for r in recent %}
+          <tr>
+            <td class="strong">{{ r.machineName }}<span class="sub mono">{{ r.machineIp or '' }}</span></td>
+            <td>{{ r.skuId }}</td>
+            <td><span class="badge b-{{ r.state }}">{{ t(r.licenseStatus) }}</span></td>
+            <td class="muted">{{ r.lastRequestTime|ago }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">{{ t('No clients yet. Run an activation script on a Windows PC and it shows up here.') }}</div>
+    {% endif %}
+  </section>
+
+  <section class="card card-dark">
+    <h2>{{ t('Activate a PC in 3 steps') }}</h2>
+    <p class="small">{{ t('Run in an elevated command prompt on the Windows client.') }}</p>
+    <pre class="code-inline" id="quick-cmds">slmgr /ipk &lt;GVLK&gt;
+slmgr /skms {{ host }}:{{ port }}
+slmgr /ato</pre>
+    <button type="button" class="btn btn-ghost-dark" data-copy="#quick-cmds">{{ t('Copy commands') }}</button>
+    <a href="{{ url_for('main.activation') }}" style="color:var(--mint);font-weight:600;font-size:14px">{{ t('Full guide, Office and GPO') }}</a>
+  </section>
+</div>
+
+<div class="grid g3">
+  <a class="health" href="{{ url_for('main.backups') }}">
+    {% if last_backup.get('ts') %}
+      <span class="mark {{ 'mark-ok' if last_backup.ok else 'mark-err' }}">{{ icon('backups') }}</span>
+      <div><strong>{{ t('Last backup') }}: {{ last_backup.ts|ago }}</strong><span>{% if last_backup.ok %}{{ (backup_settings.protocol|upper ~ ' · ' ~ backup_settings.host) if last_backup.get('uploaded') else t('Stored locally') }}{% else %}{{ last_backup.get('error', '')|truncate(60) }}{% endif %}</span></div>
+    {% else %}
+      <span class="mark mark-warn">{{ icon('backups') }}</span>
+      <div><strong>{{ t('No backup yet') }}</strong><span>{{ t('Set up a remote location') }}</span></div>
+    {% endif %}
+  </a>
+  <a class="health" href="{{ url_for('main.mail') }}">
+    {% if mail.enabled and mail.host %}
+      <span class="mark mark-info">{{ icon('mail') }}</span>
+      <div><strong>{{ t('Mail server configured') }}</strong><span>{{ mail.host }} · {{ mail.security|upper }}</span></div>
+    {% else %}
+      <span class="mark mark-warn">{{ icon('mail') }}</span>
+      <div><strong>{{ t('Mail is off') }}</strong><span>{{ t('Get notified about backups and updates') }}</span></div>
+    {% endif %}
+  </a>
+  <button type="button" class="health" data-open-info style="border:1px solid var(--line);font:inherit;text-align:left;cursor:pointer">
+    {% if update_info.get('available') %}
+      <span class="mark mark-warn">{{ icon('update') }}</span>
+      <div><strong>{{ t('Update available') }}</strong><span>v{{ update_info.remote_version }} · {{ t(update_channel) }}</span></div>
+    {% else %}
+      <span class="mark mark-ok">{{ icon('update') }}</span>
+      <div><strong>{{ t('Version') }} {{ app_version }}</strong><span>{{ t('Click to check for updates') }}</span></div>
+    {% endif %}
+  </button>
+</div>
+
+{% if events %}
+<section class="card">
+  <h2>{{ t('Activity') }}</h2>
+  <div class="table-wrap"><table>
+    <tbody>{% for e in events %}<tr><td class="muted" style="width:170px">{{ e.ts|datetime }}</td><td><span class="badge {{ 'b-attention' if e.level == 'error' else ('b-pending' if e.level == 'warning' else 'b-neutral') }}">{{ t(e.level) }}</span></td><td>{{ e.message }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

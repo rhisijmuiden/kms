@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Mail server') }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('Mail server') }}</h1>
+    <p>{{ t('Your own SMTP server for backup reports and update notices.') }}</p>
+  </div>
+</header>
+<form class="card" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="check"><input type="checkbox" name="enabled" {% if s.enabled %}checked{% endif %}>{{ t('Send mail notifications') }}</label>
+  <h2>{{ t('SMTP server') }}</h2>
+  <div class="form-grid">
+    <label class="f w4">{{ t('SMTP host') }}<input type="text" name="host" value="{{ s.host }}" placeholder="smtp.example.com"></label>
+    <label class="f w1">{{ t('Port') }}<input type="number" name="port" value="{{ s.port }}"></label>
+    <label class="f w1">{{ t('Security') }}<select name="security">
+      <option value="starttls"{% if s.security == 'starttls' %} selected{% endif %}>STARTTLS</option>
+      <option value="ssl"{% if s.security == 'ssl' %} selected{% endif %}>SSL/TLS</option>
+      <option value="none"{% if s.security == 'none' %} selected{% endif %}>{{ t('None') }}</option></select></label>
+    <label class="f">{{ t('Username') }}<input type="text" name="username" value="{{ s.username }}" autocomplete="off"></label>
+    <label class="f">{{ t('Password') }}<input type="password" name="password" placeholder="{{ t('Saved, leave empty to keep') if s.password else '' }}" autocomplete="new-password">
+      {% if s.password %}<span class="check" style="font-weight:400;min-height:24px"><input type="checkbox" name="password_clear">{{ t('Remove saved password') }}</span>{% endif %}</label>
+  </div>
+  <label class="check"><input type="checkbox" name="verify_tls" {% if s.verify_tls %}checked{% endif %}>{{ t('Verify the TLS certificate (recommended)') }}</label>
+  <p class="hint">{{ t('Common: port 587 with STARTTLS (Microsoft 365, Gmail), or 465 with SSL/TLS. TLS 1.2 or newer is required.') }}</p>
+
+  <h2>{{ t('Sender and recipients') }}</h2>
+  <div class="form-grid">
+    <label class="f w2">{{ t('From name') }}<input type="text" name="from_name" value="{{ s.from_name }}"></label>
+    <label class="f w2">{{ t('From address') }}<input type="email" name="from_address" value="{{ s.from_address }}" placeholder="kms@example.com"></label>
+    <label class="f w2">{{ t('Reply-to (optional)') }}<input type="email" name="reply_to" value="{{ s.reply_to }}"></label>
+    <label class="f w6">{{ t('Send notifications to') }}<input type="text" name="recipients" value="{{ s.recipients }}" placeholder="it@example.com, admin@example.com"><small>{{ t('Separate multiple addresses with a comma.') }}</small></label>
+  </div>
+
+  <h2>{{ t('Notify me about') }}</h2>
+  <label class="check"><input type="checkbox" name="notify_backup_fail" {% if s.notify_backup_fail %}checked{% endif %}>{{ t('Failed backups') }}</label>
+  <label class="check"><input type="checkbox" name="notify_backup_ok" {% if s.notify_backup_ok %}checked{% endif %}>{{ t('Successful backups') }}</label>
+  <label class="check"><input type="checkbox" name="notify_update" {% if s.notify_update %}checked{% endif %}>{{ t('New versions of KMS Console') }}</label>
+
+  <div class="row">
+    <button class="btn" type="submit" name="action" value="test">{{ t('Save and send test mail') }}</button>
+    <button class="btn btn-primary" type="submit" name="action" value="save">{{ t('Save') }}</button>
+  </div>
+</form>
+{% endblock %}

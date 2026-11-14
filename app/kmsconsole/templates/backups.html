@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t('Backups') }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('Backups') }}</h1>
+    <p>{{ t('Activation database and settings, saved to your own storage.') }}</p>
+  </div>
+  <form method="post" action="{{ url_for('main.backups_run') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="kind" value="incremental"><button class="btn" type="submit">{{ t('Incremental now') }}</button></form>
+  <form method="post" action="{{ url_for('main.backups_run') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="kind" value="full"><button class="btn btn-primary" type="submit">{{ t('Full backup now') }}</button></form>
+</header>
+
+{% if last.get('ts') %}
+<div class="flash {{ 'flash-ok' if last.ok else 'flash-error' }}">{{ t('Last backup') }}: {{ last.ts|datetime }} · {{ last.get('name', '') }}{% if not last.ok %} · {{ last.get('error') }}{% endif %}</div>
+{% endif %}
+
+<form method="post" class="grid g2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <section class="card">
+    <h2>{{ t('Remote location') }}</h2>
+    <label class="check"><input type="checkbox" name="remote_enabled" {% if s.remote_enabled %}checked{% endif %}>{{ t('Upload every backup to this location') }}</label>
+    <div class="segmented" role="radiogroup" aria-label="{{ t('Protocol') }}" style="display:flex">
+      {% for p, label in [('ftp', 'FTP'), ('ftps', 'FTPS'), ('scp', 'SCP'), ('sftp', 'SFTP')] %}
+      <label style="flex:1"><input type="radio" name="protocol" value="{{ p }}"{% if s.protocol == p %} checked{% endif %}><span style="width:100%;justify-content:center">{{ label }}</span></label>
+      {% endfor %}
+    </div>
+    <div class="form-grid">
+      <label class="f w4">{{ t('Host') }}<input type="text" name="host" value="{{ s.host }}" placeholder="nas.lan"></label>
+      <label class="f w2">{{ t('Port') }}<input type="number" name="port" value="{{ s.port }}"></label>
+      <label class="f w2">{{ t('Username') }}<input type="text" name="username" value="{{ s.username }}" autocomplete="off"></label>
+      <label class="f w2">{{ t('Password') }}<input type="password" name="password" placeholder="{{ t('Saved, leave empty to keep') if s.password else '' }}" autocomplete="new-password"></label>
+      <label class="f w2">{{ t('Folder') }}<input type="text" name="path" value="{{ s.path }}"></label>
+      <label class="f w6" data-ssh-only>{{ t('SSH private key (optional)') }}
+        <textarea name="ssh_key" placeholder="{{ t('Saved, leave empty to keep') if s.ssh_key else '-----BEGIN OPENSSH PRIVATE KEY-----' }}"></textarea>
+        <small>{{ t('With a key, the password field is used as the key passphrase.') }}{% if s.host_fingerprint %} {{ t('Trusted host key:') }} <span class="mono">{{ s.host_fingerprint }}</span>{% endif %}</small></label>
+    </div>
+    <label class="check" data-tls-only><input type="checkbox" name="verify_tls" {% if s.verify_tls %}checked{% endif %}>{{ t('Verify the TLS certificate') }}</label>
+    {% if s.host_fingerprint %}<label class="check" data-ssh-only><input type="checkbox" name="reset_fingerprint">{{ t('Forget the trusted host key (when the server was reinstalled)') }}</label>{% endif %}
+    <div class="flash" data-remote-test-out hidden></div>
+    <div class="row">
+      <button class="btn" type="button" data-remote-test>{{ t('Test connection') }}</button>
+      <span class="hint">{{ t('Save first, then test.') }}</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>{{ t('Schedule') }}</h2>
+    <div class="form-grid">
+      <label class="f w2">{{ t('Full backup') }}<select name="full_schedule">
+        {% for v, l in [('off', 'Off'), ('daily', 'Daily'), ('weekly', 'Weekly'), ('monthly', 'Monthly (1st)')] %}<option value="{{ v }}"{% if s.full_schedule == v %} selected{% endif %}>{{ t(l) }}</option>{% endfor %}</select></label>
+      <label class="f w2">{{ t('Day') }}<select name="full_weekday">
+        {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}<option value="{{ loop.index0 }}"{% if s.full_weekday == loop.index0 %} selected{% endif %}>{{ t(d) }}</option>{% endfor %}</select></label>
+      <label class="f w2">{{ t('Time') }}<input type="time" name="full_time" value="{{ s.full_time }}"></label>
+      <label class="f w2">{{ t('Incremental') }}<select name="inc_schedule">
+        {% for v, l in [('off', 'Off'), ('hourly', 'Hourly'), ('daily', 'Daily')] %}<option value="{{ v }}"{% if s.inc_schedule == v %} selected{% endif %}>{{ t(l) }}</option>{% endfor %}</select></label>
+      <label class="f w2">{{ t('Time') }}<input type="time" name="inc_time" value="{{ s.inc_time }}"><small>{{ t('Hourly uses the minutes only.') }}</small></label>
+      <label class="f w2">{{ t('Keep') }}<input type="number" name="keep_chains" min="1" max="100" value="{{ s.keep_chains }}"><small>{{ t('Full backups (with their incrementals)') }}</small></label>
+    </div>
+    <h2>{{ t('Encryption') }}</h2>
+    <label class="f w6" style="grid-column:auto">{{ t('Backup passphrase (optional)') }}
+      <input type="password" name="passphrase" placeholder="{{ t('Saved, leave empty to keep') if s.passphrase else t('Empty = not encrypted') }}" autocomplete="new-password">
+      <small>{{ t('Backups contain your settings and secrets. With a passphrase they are encrypted with AES. Keep the passphrase safe: without it a restore is impossible.') }}</small></label>
+    {% if s.passphrase %}<label class="check"><input type="checkbox" name="passphrase_clear">{{ t('Stop encrypting new backups') }}</label>{% endif %}
+    {% if jobs %}<p class="hint">{{ t('Next runs') }}: {% for j in jobs if j.id.startswith('backup') %}{{ t('Full') if j.id == 'backup-full' else t('Incremental') }} {{ j.next.strftime('%Y-%m-%d %H:%M') if j.next else '-' }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    <div class="row" style="margin-top:auto"><button class="btn btn-primary" type="submit">{{ t('Save backup settings') }}</button></div>
+  </section>
+</form>
+
+<section class="card">
+  <div class="card-head">
+    <h2>{{ t('Backups on the remote location') }}</h2>
+    <button class="btn btn-sm" type="button" data-remote-list>{{ t('Load list') }}</button>
+  </div>
+  <p class="hint">{{ t('A restore rebuilds the full backup plus every incremental after it, up to the one you pick. A safety backup of the current state is made first.') }}</p>
+  <div class="table-wrap"><table style="min-width:700px">
+    <thead><tr><th>{{ t('Date') }}</th><th>{{ t('Type') }}</th><th>{{ t('Size') }}</th><th>{{ t('File') }}</th><th><span class="sr">{{ t('Actions') }}</span></th></tr></thead>
+    <tbody data-remote-body><tr><td colspan="5" class="empty">{{ t('Click Load list to see what is stored remotely.') }}</td></tr></tbody>
+  </table></div>
+  <template id="remote-row"><tr><td class="strong" data-f="date"></td><td><span data-f="kind"></span></td><td class="muted" data-f="size"></td><td class="mono small muted" data-f="name"></td>
+    <td class="actions"><button type="button" class="btn btn-sm" data-restore data-source="remote">{{ t('Restore to here') }}</button></td></tr></template>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>{{ t('Local backups') }}</h2>
+    <form method="post" action="{{ url_for('main.backups_upload') }}" enctype="multipart/form-data" class="row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="btn btn-sm" style="cursor:pointer">{{ t('Choose files') }}<input type="file" name="files" multiple accept=".gz,.enc" class="sr" onchange="this.form.submit()"></label>
+    </form>
+  </div>
+  {% if local %}
+  <div class="table-wrap"><table style="min-width:700px">
+    <thead><tr><th>{{ t('Date') }}</th><th>{{ t('Type') }}</th><th>{{ t('Size') }}</th><th>{{ t('File') }}</th><th><span class="sr">{{ t('Actions') }}</span></th></tr></thead>
+    <tbody>{% for b in local %}
+      <tr><td class="strong">{{ b.created|datetime }}</td>
+        <td><span class="badge {{ 'b-full' if b.kind == 'full' else 'b-inc' }}">{{ t('Full') if b.kind == 'full' else t('Incremental') }}</span></td>
+        <td class="muted">{{ b.size|filesize }}</td>
+        <td class="mono small muted">{{ b.name }}</td>
+        <td class="actions">
+          <a class="btn btn-sm" href="{{ url_for('main.backups_download', name=b.name) }}" aria-label="{{ t('Download') }}">{{ icon('download') }}</a>
+          <button type="button" class="btn btn-sm" data-restore data-source="local" data-name="{{ b.name }}">{{ t('Restore to here') }}</button>
+          <form method="post" action="{{ url_for('main.backups_delete') }}" style="display:inline" data-confirm="{{ t('Delete this local backup file?') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn btn-sm btn-danger" type="submit">{{ t('Delete') }}</button></form>
+        </td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}
+  <div class="empty">{{ t('No local backups yet.') }}</div>
+  {% endif %}
+</section>
+
+<dialog id="restore-dialog" aria-label="{{ t('Restore backup') }}">
+  <form class="dlg" method="post" action="{{ url_for('main.backups_restore') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="name"><input type="hidden" name="source">
+    <div class="dlg-head"><h2>{{ t('Restore backup') }}</h2><button type="button" class="x" aria-label="{{ t('Close') }}">×</button></div>
+    <p>{{ t('This replaces the activation database and all settings with the state of:') }}<br><strong class="mono small" data-restore-name></strong></p>
+    <div class="callout">{{ t('A full safety backup of the current state is made first, so you can go back.') }}</div>
+    <label class="f" style="grid-column:auto">{{ t('Type RESTORE to confirm') }}<input type="text" name="confirm" autocomplete="off" required pattern="RESTORE"></label>
+    <div class="row"><button class="btn btn-primary" type="submit">{{ t('Restore') }}</button></div>
+  </form>
+</dialog>
+{% endblock %}
