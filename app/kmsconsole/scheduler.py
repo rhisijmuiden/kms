@@ -59,6 +59,15 @@ def reload():
                        misfire_grace_time=3600, coalesce=True, max_instances=1)
 
     _sched.add_job(_update_check, CronTrigger(hour=6, minute=17), id="update-check", coalesce=True)
+    _sched.add_job(_blocked_check, CronTrigger(minute="*/15"), id="blocked-check", coalesce=True, max_instances=1)
+
+
+def _blocked_check():
+    from . import network
+    try:
+        network.check_blocked()
+    except Exception as exc:  # noqa: BLE001 - a background job must never crash the scheduler
+        store.log_event("warning", f"Blocked-attempts check failed: {exc}")
 
 
 def start():

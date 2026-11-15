@@ -39,7 +39,8 @@ def env(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def client(env):
-    from kmsconsole import create_app
+    from kmsconsole import create_app, network
+    network.invalidate()
     app = create_app(start_scheduler=False, testing=True)
     c = app.test_client()
     r = c.post("/setup", data={"username": "admin", "password": "secretpass1", "password2": "secretpass1"})

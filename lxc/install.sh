@@ -47,6 +47,19 @@ if [[ $UPGRADE -eq 0 ]]; then
   ok "packages"
 fi
 
+# Firewall and HTTPS for Network & access (also added on upgrades of older installs)
+missing=()
+for pkg in nftables caddy; do dpkg -s "$pkg" >/dev/null 2>&1 || missing+=("$pkg"); done
+if ((${#missing[@]})); then
+  info "Installing ${missing[*]}"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq --no-install-recommends "${missing[@]}" >/dev/null
+  # Caddy starts with a demo site on port 80; it only runs when HTTPS with Caddy is chosen in the GUI
+  systemctl disable --now --quiet caddy.service 2>/dev/null || true
+  ok "${missing[*]}"
+fi
+
 if ! id kms >/dev/null 2>&1; then
   useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin kms
 fi
@@ -120,7 +133,8 @@ visudo -cf /etc/sudoers.d/kms-console >/dev/null || die "sudoers rule invalid"
 
 install -o root -g root -m 0644 "$APP_DIR"/lxc/systemd/*.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --quiet kms-server.service kms-console.service
+systemctl enable --quiet kms-server.service kms-console.service kms-firewall.service
+/usr/local/sbin/kms-ctl net-apply >/dev/null || echo "warning: Network & access settings could not be applied, see the web GUI"
 systemctl restart kms-server.service
 systemctl restart kms-console.service
 ok "services kms-server and kms-console"

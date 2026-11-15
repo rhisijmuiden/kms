@@ -4,11 +4,20 @@ import os
 import time
 
 from flask import Flask, g, redirect, request, session, url_for
+from flask.sessions import SecureCookieSessionInterface
+from markupsafe import escape
 from flask_wtf.csrf import CSRFProtect
 
-from . import config, i18n, store
+from . import config, i18n, network, store
 
 csrf = CSRFProtect()
+
+
+class _SessionInterface(SecureCookieSessionInterface):
+    """Secure cookies whenever the request arrived over HTTPS (Caddy or a trusted reverse proxy)."""
+
+    def get_cookie_secure(self, app):
+        return bool(app.config["SESSION_COOKIE_SECURE"] or request.is_secure)
 
 
 def _pykms_version():
@@ -35,6 +44,18 @@ def create_app(start_scheduler=True, testing=False):
         WTF_CSRF_ENABLED=not testing,
     )
     csrf.init_app(app)
+    app.session_interface = _SessionInterface()
+    app.wsgi_app = network.ProxyMiddleware(app.wsgi_app)
+
+    @app.before_request
+    def _web_access():
+        if request.endpoint in ("main.healthz", "static"):
+            return None
+        if not network.web_allowed(request.remote_addr or ""):
+            return (f"<!doctype html><title>403</title><p style='font-family:sans-serif'>"
+                    f"Access denied for {escape(request.remote_addr)}. This address is not on the web access list of KMS Console.</p>",
+                    403, {"Content-Type": "text/html; charset=utf-8"})
+        return None
 
     @app.before_request
     def _lang():

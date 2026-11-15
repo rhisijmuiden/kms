@@ -5,6 +5,8 @@ set -euo pipefail
 
 APP_DIR=/opt/kms-console
 VENV=/opt/kms-venv
+CONF_DIR=/etc/kms-console
+RUN_DIR=/run/kms-console
 LOG=/var/log/kms-console-update.log
 BRANCH_RE='^[A-Za-z0-9._/-]{1,100}$'
 
@@ -89,6 +91,60 @@ case "$cmd" in
     [[ -f "$LOG" ]] && tail -n 200 "$LOG" || echo "No update has run yet."
     ;;
 
+  net-apply)
+    # Load the firewall (nftables) and Caddy from network.json, written by the web GUI.
+    # netrender.py validates everything again here, as root, before nft or Caddy see it.
+    cfg="$CONF_DIR/network.json"
+    nb=(); [[ "${1:-}" == "--boot" ]] && nb=(--no-block)   # at boot, do not wait for Caddy
+    install -d -m 0750 "$RUN_DIR"
+    if [[ ! -f "$cfg" ]]; then
+      command -v nft >/dev/null && nft delete table inet kmsconsole 2>/dev/null || true
+      systemctl disable --now --quiet caddy.service 2>/dev/null || true
+      echo "ok (no network settings yet)"; exit 0
+    fi
+    mode="$(python3 -I "$APP_DIR/app/kmsconsole/netrender.py" "$cfg" "$RUN_DIR" 2>&1)" || die "$mode"
+    if [[ -s "$RUN_DIR/kmsconsole.nft" ]]; then
+      command -v nft >/dev/null || die "nftables is not installed. Run: apt install nftables"
+      err="$(nft -c -f "$RUN_DIR/kmsconsole.nft" 2>&1)" \
+        || die "The firewall rules could not be loaded: ${err:-unknown error}. In a Proxmox container the nf_tables module must be loaded on the host (modprobe nf_tables)."
+      nft -f "$RUN_DIR/kmsconsole.nft"
+    else
+      command -v nft >/dev/null && nft delete table inet kmsconsole 2>/dev/null || true
+    fi
+    if [[ "$mode" == "caddy" ]]; then
+      command -v caddy >/dev/null || die "Caddy is not installed. Run: apt install caddy"
+      err="$(caddy validate --adapter caddyfile --config "$RUN_DIR/Caddyfile" 2>&1)" || die "Caddy configuration is invalid: $(echo "$err" | tail -n 2)"
+      install -o root -g root -m 0644 "$RUN_DIR/Caddyfile" /etc/caddy/Caddyfile
+      systemctl enable --quiet caddy.service
+      systemctl "${nb[@]}" reload-or-restart caddy.service || die "Caddy failed to start: $(journalctl -u caddy -n 5 --no-pager -o cat | tail -n 3)"
+    else
+      systemctl disable --now --quiet caddy.service 2>/dev/null || true
+    fi
+    echo "ok $mode"
+    ;;
+
+  net-blocked)
+    command -v nft >/dev/null || exit 0
+    nft -j list set inet kmsconsole blocked4 2>/dev/null || true
+    echo
+    nft -j list set inet kmsconsole blocked6 2>/dev/null || true
+    ;;
+
+  net-status)
+    printf '{"nft": %s, "caddy": %s, "table": %s}\n' \
+      "$(json_str "$(command -v nft >/dev/null && echo installed || echo missing)")" \
+      "$(json_str "$(systemctl is-active caddy.service 2>/dev/null || true)")" \
+      "$(json_str "$(nft list table inet kmsconsole >/dev/null 2>&1 && echo loaded || echo none)")"
+    ;;
+
+  access-reset)
+    # Locked out of the web interface? Run this in the Proxmox console (pct enter <id>).
+    sudo -u kms env KMS_CONSOLE_ROOT="$APP_DIR" PYTHONPATH="$APP_DIR/app" "$VENV/bin/python" -c \
+      'from kmsconsole import store, network; store.init(); network.reset_web_access()'
+    "$0" net-apply
+    echo "Web access list cleared. The web interface is open again on port 8080."
+    ;;
+
   reset-password)
     user="${1:-admin}"
     [[ "$user" =~ ^[A-Za-z0-9._@-]{3,64}$ ]] || die "invalid username"
@@ -119,6 +175,10 @@ usage: kms-ctl <command>
   update <branch>        update KMS Console to a branch (runs in the background)
   update-log             output of the last update
   reset-password [user]  set a new random password (creates the user when missing)
+  net-apply              load firewall and Caddy from network settings
+  net-blocked            addresses blocked on the KMS port (nft JSON)
+  net-status             firewall and Caddy state as JSON
+  access-reset           clear the web access list (when locked out)
 EOF
     exit 2
     ;;

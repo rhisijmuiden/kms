@@ -186,3 +186,17 @@
     if (!window.confirm(f.dataset.confirm)) e.preventDefault();
   }));
 })();
+
+// Network & access: show the settings that belong to the chosen mode
+(() => {
+  const radios = document.querySelectorAll("input[name=mode][data-mode]");
+  if (!radios.length) return;
+  const sync = () => {
+    const mode = [...radios].find((r) => r.checked)?.value;
+    document.querySelectorAll("[data-mode-panel]").forEach((p) => {
+      p.hidden = !p.dataset.modePanel.split(" ").includes(mode);
+    });
+  };
+  radios.forEach((r) => r.addEventListener("change", sync));
+  sync();
+})();

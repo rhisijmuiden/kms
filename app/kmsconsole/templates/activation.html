@@ -18,7 +18,7 @@
 <section class="card">
   <form class="row" method="get" action="{{ url_for('main.activation') }}">
     <div class="segmented" role="tablist" aria-label="{{ t('Script type') }}">
-      {% for key, label in [('windows', 'Windows'), ('office', 'Office'), ('gpo', 'GPO / registry'), ('dns', 'DNS (auto discovery)')] %}
+      {% for key, label in [('windows', 'Windows'), ('eval', 'Evaluation to full'), ('office', 'Office'), ('gpo', 'GPO / registry'), ('dns', 'DNS (auto discovery)')] %}
       <a role="tab" aria-selected="{{ 'true' if tab == key else 'false' }}" class="{{ 'is-on' if tab == key }}" href="{{ url_for('main.activation', tab=key, fmt=fmt) }}">{{ t(label) }}</a>
       {% endfor %}
     </div>
@@ -33,10 +33,20 @@
       </select>
     </label>
     {% endif %}
+    {% if tab == 'eval' %}
+    <label class="f" style="grid-column:auto;flex:1 1 280px;flex-direction:row;align-items:center;gap:10px;margin-left:auto">{{ t('Target edition') }}
+      <select name="target" data-autosubmit style="flex:1">
+        <option value="auto"{% if target == 'auto' %} selected{% endif %}>{{ t('Detect automatically (Standard stays Standard, Datacenter stays Datacenter)') }}</option>
+        <option value="ServerStandard"{% if target == 'ServerStandard' %} selected{% endif %}>Windows Server Standard</option>
+        <option value="ServerDatacenter"{% if target == 'ServerDatacenter' %} selected{% endif %}>Windows Server Datacenter</option>
+      </select>
+      <input type="hidden" name="fmt" value="{{ fmt }}">
+    </label>
+    {% endif %}
     {% if tab != 'dns' %}
     <div class="segmented" role="group" aria-label="{{ t('Format') }}">
-      <a class="{{ 'is-on' if fmt != 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, fmt='cmd') }}">{{ '.cmd' if tab != 'gpo' else '.reg' }}</a>
-      <a class="{{ 'is-on' if fmt == 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, fmt='ps1') }}">{{ 'PowerShell' if tab != 'gpo' else 'GPO (PowerShell)' }}</a>
+      <a class="{{ 'is-on' if fmt != 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, target=target, fmt='cmd') }}">{{ '.cmd' if tab != 'gpo' else '.reg' }}</a>
+      <a class="{{ 'is-on' if fmt == 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, target=target, fmt='ps1') }}">{{ 'PowerShell' if tab != 'gpo' else 'GPO (PowerShell)' }}</a>
     </div>
     {% endif %}
     <noscript><button class="btn" type="submit">{{ t('Show') }}</button></noscript>
@@ -44,6 +54,7 @@
 
   <p class="muted small">
     {% if tab == 'windows' %}{{ t('Run this file as administrator. It installs the key, sets the KMS server and activates.') }}
+    {% elif tab == 'eval' %}{{ t('One script for an Evaluation install of {versions}. It detects the edition and version, converts it to the full volume license edition with DISM, restarts once and then activates against this KMS server by itself.', versions=server_versions|join(', ')) }}
     {% elif tab == 'office' %}{{ t('Works for Office 2010 to LTSC 2024 volume license editions. The script finds OSPP.VBS by itself, then sets the server and activates.') }}
     {% elif tab == 'gpo' %}{{ t('Import on one PC, or roll out the same values to every PC with a Group Policy.') }}
     {% else %}{{ t('With this SRV record, clients find the server by themselves. No script needed, only the volume key.') }}{% endif %}
@@ -54,11 +65,65 @@
     <div class="code-head">
       <span class="fname">{{ filename }}</span>
       <button type="button" class="btn btn-sm btn-ghost-dark" data-copy="#script-code">{{ t('Copy') }}</button>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('main.activation_download', kind=kind, sku=sku_id) }}">{{ icon('download') }}{{ t('Download') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('main.activation_download', kind=kind, sku=sku_id, target=target) }}">{{ icon('download') }}{{ t('Download') }}</a>
     </div>
     <pre id="script-code">{{ code }}</pre>
   </div>
 </section>
+
+{% if tab == 'eval' %}
+<section class="card" id="eval">
+  <div class="card-head"><h2>{{ t('How the conversion works') }}</h2><span class="badge b-neutral">DISM /Set-Edition</span></div>
+  <div class="grid g4" style="gap:12px">
+    <div class="step"><span class="n">1</span><strong>{{ t('Detect') }}</strong><p>{{ t('Reads the current edition (for example ServerStandardEval) and the build number to pick the right volume key. Checks that {host} is reachable on port {port}.', host=host, port=port) }}</p></div>
+    <div class="step"><span class="n">2</span><strong>{{ t('Convert with DISM') }}</strong><p>{{ t('Runs DISM /Set-Edition with the volume key and /AcceptEula. This takes 10 to 20 minutes.') }}</p></div>
+    <div class="step"><span class="n">3</span><strong>{{ t('Restart once') }}</strong><p>{{ t('Adds a one-time startup task, then restarts after a 60 second warning. Use -NoRestart (PowerShell) or norestart (.cmd) to restart later yourself.') }}</p></div>
+    <div class="step"><span class="n">4</span><strong>{{ t('Activate with KMS') }}</strong><p>{{ t('After the restart the task points Windows to {host}:{port}, activates, retries for 10 minutes if the network is not ready yet, and removes itself.', host=host, port=port) }}</p></div>
+  </div>
+  <div class="row" style="gap:8px">
+    <span class="small" style="font-weight:600">{{ t('Conversions') }}</span>
+    <span class="kbd">ServerStandardEval → ServerStandard</span>
+    <span class="kbd">ServerDatacenterEval → ServerDatacenter</span>
+    <span class="kbd">ServerStandardEval → ServerDatacenter</span>
+  </div>
+  <p class="muted small">{{ t('Already a full edition? Then the script only installs the volume key and activates, without a restart.') }}</p>
+  <div class="grid g2" style="gap:12px">
+    <div class="callout"><strong>{{ t('Not for domain controllers.') }}</strong> {{ t('Microsoft does not support converting an Evaluation domain controller. The script stops without changing anything. Demote it first, or move the role to another server.') }}</div>
+    <div class="callout"><strong>{{ t('Windows 10/11 Enterprise Evaluation') }}</strong> {{ t('cannot be converted with DISM. The script detects it and stops. Those PCs need a fresh install from volume license media.') }}</div>
+  </div>
+  <div class="callout callout-info">{{ t('The log is written to {path}. Check the result with slmgr /dlv after the restart, or look for the server under Clients.', path='C:\\ProgramData\\KMSConsole\\activation.log') }}</div>
+</section>
+{% endif %}
+
+{% if tab == 'dns' %}
+{% set target = ('kms.' ~ domain) if host_is_ip else host %}
+<section class="card" id="unifi">
+  <div class="card-head"><h2>{{ t('Set it up on a UniFi Gateway') }}</h2><span class="badge b-neutral">UniFi Network 8.2+</span></div>
+  <p class="muted small">{{ t('UniFi gateways (UDM, UCG, UXG, Cloud Key with gateway) can serve the SRV record themselves. Clients must use the gateway as DNS server, which is the default.') }}</p>
+  <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:14px;font-size:14px">
+    <li><strong>{{ t('Open the DNS records') }}</strong><br>
+      <span class="muted">{{ t('Network 9.4 and newer:') }}</span> <span class="kbd">Settings › Policy Table › Create New Policy › DNS</span><br>
+      <span class="muted">{{ t('Network 9.3:') }}</span> <span class="kbd">Settings › Policy Engine › DNS</span><br>
+      <span class="muted">{{ t('Network 8.2 to 9.2:') }}</span> <span class="kbd">Settings › Routing › DNS › Create Entry</span></li>
+    <li><strong>{{ t('Give the KMS container a name') }}</strong> ({{ t('type') }} <span class="kbd">Host (A)</span>)<br>
+      {{ t('Domain name') }} <span class="kbd">{{ target }}</span> · {{ t('IP address') }} <span class="kbd">{{ host if host_is_ip else t('IP of this container') }}</span><br>
+      <span class="muted small">{{ t('An SRV record must point to a name, not to an IP address. Skip this step when the name already resolves.') }}</span></li>
+    <li><strong>{{ t('Add the SRV record') }}</strong> ({{ t('type') }} <span class="kbd">Service (SRV)</span>)<br>
+      {{ t('Domain name') }} <span class="kbd">_vlmcs._tcp.{{ domain }}</span> · {{ t('Target') }} <span class="kbd">{{ target }}</span> · {{ t('Port') }} <span class="kbd">{{ port }}</span> · {{ t('Priority') }} <span class="kbd">0</span> · {{ t('Weight') }} <span class="kbd">0</span><br>
+      <span class="muted small">{{ t('Some versions ask for service and protocol separately: use _vlmcs and _tcp with domain {domain}.', domain=domain) }}</span></li>
+    <li><strong>{{ t('Check the domain name of the network') }}</strong><br>
+      <span class="kbd">Settings › Networks › {{ t('your network') }} › DHCP › Domain Name</span> = <span class="kbd">{{ domain }}</span><br>
+      <span class="muted small">{{ t('Windows looks up _vlmcs._tcp in this DNS suffix. Run ipconfig /renew on a client after changing it.') }}</span></li>
+    <li><strong>{{ t('Test on a Windows client') }}</strong>
+      <pre class="code-inline" style="background:var(--abyss);margin-top:8px" id="unifi-test">nslookup -type=srv _vlmcs._tcp.{{ domain }}
+slmgr /ckms
+slmgr /ato</pre>
+      <span class="muted small">{{ t('slmgr /ckms removes a manually set KMS server, so the client uses DNS again.') }}</span></li>
+  </ol>
+  <div class="callout callout-info">{{ t('Older than Network 8.2, or no SRV option? Update the UniFi Network application, or use Forward Domain to send the domain to a DNS server that supports SRV (Pi-hole, Windows DNS). The GPO / registry tab works without DNS.') }}</div>
+  <p class="muted small">{{ t('The domain {domain} comes from the address under KMS server. Set a hostname there (for example kms.home.lan) to change it.', domain=domain) }}</p>
+</section>
+{% endif %}
 
 <div class="grid g2">
   <section class="card">

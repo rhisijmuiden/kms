@@ -67,6 +67,7 @@ DEFAULTS = {
     "mail.notify_backup_ok": False,
     "mail.notify_backup_fail": True,
     "mail.notify_update": True,
+    "mail.notify_blocked": True,
     # Backups
     "backup.remote_enabled": False,
     "backup.protocol": "sftp",       # ftp | ftps | scp | sftp
@@ -85,6 +86,17 @@ DEFAULTS = {
     "backup.inc_schedule": "daily",     # off | hourly | daily
     "backup.inc_time": "03:30",
     "backup.keep_chains": 4,
+    # Network & access (see network.py / netrender.py)
+    "net.mode": "lan",               # lan | caddy | proxy
+    "net.domain": "",
+    "net.acme_email": "",
+    "net.close_console": True,       # caddy mode: port 8080 only from the container itself
+    "net.proxy_ips": [],             # [{cidr, descr, added}]
+    "net.web_acl": [],               # empty = everyone may open the web interface
+    "net.kms_acl": [],
+    "net.kms_restrict": False,       # True = only kms_acl may use the KMS port
+    "net.blocked_alerted": {},
+    "net.last_error": "",
     # Updates
     "update.channel": "production",
     "update.branch_production": "master",

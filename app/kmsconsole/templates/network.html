@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Network & access') }}{% endblock %}
+{% macro acl_table(scope, entries, extra=None) %}
+<div class="table-card">
+  <table>
+    <thead><tr><th>{{ t('Address or range') }}</th><th>{{ t('Description') }}</th>{% if extra is not none %}<th>{{ t('Type') }}</th><th>{{ t('Activations (30 days)') }}</th>{% else %}<th>{{ t('Added') }}</th>{% endif %}<th><span class="sr">{{ t('Actions') }}</span></th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td class="mono">{{ e.cidr }}{% if scope == 'web' and e.cidr == client_ip %} <span class="badge b-neutral">{{ t('you') }}</span>{% endif %}</td>
+        <td>{{ t(e.descr) if e.descr else '' }}</td>
+        {% if extra is not none %}
+        <td>{% if e.public %}<span class="badge b-pending">{{ t('Public') }}</span>{% else %}<span class="badge b-inc">{{ t('Private') }}</span>{% endif %}</td>
+        <td>{{ extra.get(e.cidr, 0) }}</td>
+        {% else %}
+        <td class="muted">{{ e.added|datetime }}</td>
+        {% endif %}
+        <td class="actions"><form method="post" action="{{ url_for('main.network_acl') }}" data-confirm="{{ t('Remove {cidr} from the list?', cidr=e.cidr) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="scope" value="{{ scope }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="cidr" value="{{ e.cidr }}">
+          <button class="btn btn-sm btn-danger" type="submit">{{ t('Remove') }}</button></form></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="{{ 5 if extra is not none else 4 }}" class="muted">{{ t('No entries yet.') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<form class="acl-add" method="post" action="{{ url_for('main.network_acl') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="scope" value="{{ scope }}"><input type="hidden" name="action" value="add">
+  <label class="f">{{ t('IP address or range (CIDR)') }}<input type="text" name="cidr" class="mono" placeholder="{{ '203.0.113.10' if scope == 'kms' else '203.0.113.0/24' }}" required></label>
+  <label class="f grow">{{ t('Description') }}<input type="text" name="descr" maxlength="80" placeholder="{{ t('For example: branch office') }}"></label>
+  <button class="btn btn-primary" type="submit">{{ t('Add') }}</button>
+</form>
+{% endmacro %}
+
+{% block content %}
+<header class="page-head">
+  <div class="titles">
+    <h1>{{ t('Network & access') }}</h1>
+    <p>{{ t('Choose how people reach the web interface, and who may use the KMS server.') }}</p>
+  </div>
+  <div class="segmented" role="tablist" aria-label="{{ t('Section') }}">
+    <a role="tab" aria-selected="{{ 'true' if tab == 'web' else 'false' }}" class="{{ 'is-on' if tab == 'web' }}" href="{{ url_for('main.network') }}">{{ t('Web interface') }}</a>
+    <a role="tab" aria-selected="{{ 'true' if tab == 'kms' else 'false' }}" class="{{ 'is-on' if tab == 'kms' }}" href="{{ url_for('main.network', tab='kms') }}">{{ t('KMS port {port}', port=kms_port) }}</a>
+  </div>
+</header>
+
+{% if s.last_error %}<div class="callout">{{ t('The last change could not be applied:') }} {{ s.last_error }}</div>{% endif %}
+
+{% if tab == 'web' %}
+<form class="card" method="post" action="{{ url_for('main.network_mode') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h2>{{ t('How is the web interface reached?') }}</h2>
+  <div class="modes" role="radiogroup" aria-label="{{ t('Mode') }}">
+    <label class="mode"><span class="t"><input type="radio" name="mode" value="lan" data-mode {% if s.mode == 'lan' %}checked{% endif %}>{{ t('Local network only') }}</span>
+      <p>{{ t('http://{ip}:{port}. No certificate. Fine when only your LAN uses it.', ip=host_ip, port=console_port) }}</p></label>
+    <label class="mode"><span class="t"><input type="radio" name="mode" value="caddy" data-mode {% if s.mode == 'caddy' %}checked{% endif %}>{{ t('Own HTTPS with Caddy') }}</span>
+      <p>{{ t("The container gets a free certificate from Let's Encrypt and renews it by itself. Needs a domain name and ports 80 and 443.") }}</p></label>
+    <label class="mode"><span class="t"><input type="radio" name="mode" value="proxy" data-mode {% if s.mode == 'proxy' %}checked{% endif %}>{{ t('Behind a reverse proxy') }}</span>
+      <p>{{ t('Your own proxy (Nginx Proxy Manager, Traefik, HAProxy) handles HTTPS. KMS Console only trusts that proxy.') }}</p></label>
+  </div>
+
+  <div class="mode-panel" data-mode-panel="caddy">
+    <div class="form-grid">
+      <label class="f w3" style="grid-column:span 3">{{ t('Domain name') }}<input type="text" name="domain" value="{{ s.domain }}" placeholder="kms.example.com" autocomplete="off">
+        <small>{{ t('An A record must point to the public IP of this container, or forward ports 80 and 443 to {ip}.', ip=host_ip) }}</small></label>
+      <label class="f" style="grid-column:span 3">{{ t("Email for Let's Encrypt") }}<input type="email" name="acme_email" value="{{ s.acme_email }}" placeholder="admin@example.com">
+        <small>{{ t('Optional. Used only for warnings about expiring certificates.') }}</small></label>
+    </div>
+    {% if s.mode == 'caddy' %}
+    <div class="cert {{ 'ok' if https_check.ok else 'bad' }}">
+      <span class="txt">{% if https_check.ok %}<strong>{{ t('Certificate active') }}</strong> {{ t('for {domain}, valid until {date}, renews by itself', domain=s.domain, date=https_check.expires|datetime) }}{% elif https_check.ts %}<strong>{{ t('HTTPS does not work yet') }}</strong> · {{ https_check.error }}{% else %}{{ t('Not checked yet. Caddy needs a minute for the first certificate.') }}{% endif %}</span>
+      <button class="btn btn-sm" type="submit" formaction="{{ url_for('main.network_test_https') }}" formnovalidate>{{ t('Test HTTPS') }}</button>
+    </div>
+    {% endif %}
+    <label class="check"><input type="checkbox" name="close_console" {% if s.close_console and s.mode == 'caddy' %}checked{% endif %}>{{ t('Close port {port} to the outside, so the web interface only works over HTTPS', port=console_port) }}</label>
+    <p class="muted small">{{ t("Port 80 stays open for everyone: Let's Encrypt uses it to check the domain, and Caddy sends visitors on to HTTPS. The web access list below applies to port 443.") }}</p>
+  </div>
+
+  <div class="mode-panel" data-mode-panel="proxy">
+    <label class="f" style="grid-column:auto">{{ t('IP address of your reverse proxy') }}
+      <textarea name="proxy_ips" rows="2" class="mono" placeholder="10.10.4.10">{% for p in s.proxy_ips %}{{ p.cidr }}
+{% endfor %}</textarea>
+      <small>{{ t('One per line. Only these addresses may send X-Forwarded-For, and port {port} only accepts them and the web access list.', port=console_port) }}</small></label>
+    <div class="callout callout-info">{{ t('Point the proxy to http://{ip}:{port} and let it send X-Forwarded-For and X-Forwarded-Proto. Port {kms} is plain TCP and never goes through the proxy.', ip=host_ip, port=console_port, kms=kms_port) }}</div>
+    {% if via_proxy %}<p class="muted small">{{ t('You are connected through the proxy now. Your real address is {ip}.', ip=client_ip) }}</p>{% endif %}
+  </div>
+
+  <div class="row"><button class="btn btn-primary" type="submit">{{ t('Save and apply') }}</button></div>
+</form>
+
+<form class="card" id="kms-name" method="post" action="{{ url_for('main.network_kms_name') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card-head"><h2>{{ t('Name in the activation scripts') }}</h2>
+    {% if name_check.state == 'ok' %}<span class="badge b-ok">{{ t('Points to this container') }}</span>
+    {% elif name_check.state == 'other' %}<span class="badge b-attention">{{ t('Points elsewhere') }}</span>
+    {% elif name_check.state == 'unresolved' %}<span class="badge b-pending">{{ t('Not in DNS yet') }}</span>
+    {% else %}<span class="badge b-neutral">{{ t('Using the IP address') }}</span>{% endif %}</div>
+  <div class="acl-add">
+    <label class="f grow">{{ t('Hostname clients use for KMS') }}<input type="text" name="kms_name" class="mono" value="{{ kms_name }}" placeholder="{{ host_ip }}" autocomplete="off"></label>
+    <button class="btn btn-primary" type="submit">{{ t('Save') }}</button>
+  </div>
+  <p class="muted small" style="margin:0">{{ t('Used in every activation script, the GPO and the DNS examples. Leave empty to use {ip}.', ip=host_ip) }}</p>
+  {% if name_check.state == 'other' %}
+  <div class="callout">{{ t('{name} points to {addrs}, not to this container ({ip}). Port {port} is not passed through a proxy, so use a name that points straight to {ip}, for example kms.your-domain inside your LAN.', name=kms_name, addrs=name_check.addrs|join(', '), ip=host_ip, port=kms_port) }}</div>
+  {% elif s.mode != 'lan' %}
+  <p class="muted small">{{ t('The web interface can have a public name through {via}, but port {port} always goes straight to this container. Give clients a name that points to {ip}, or the same name when your DNS gives the LAN this address.', via=('Caddy' if s.mode == 'caddy' else t('your proxy')), port=kms_port, ip=host_ip) }}</p>
+  {% endif %}
+</form>
+
+<section class="card">
+  <div class="card-head"><h2>{{ t('Who may open the web interface') }}</h2>
+    {% if s.web_acl %}<span class="badge b-inc">{{ t('Everything else is blocked') }}</span>{% else %}<span class="badge b-neutral">{{ t('Open to everyone who can reach it') }}</span>{% endif %}</div>
+  {{ acl_table('web', s.web_acl) }}
+  <form method="post" action="{{ url_for('main.network_acl') }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="scope" value="web"><input type="hidden" name="action" value="add"><input type="hidden" name="mine" value="1"><input type="hidden" name="descr" value="Added from the web interface">
+    <button class="btn btn-sm" type="submit">{{ t('Add my current IP ({ip})', ip=client_ip) }}</button>
+  </form>
+  <div class="callout callout-info"><strong>{{ t('Lock-out protection.') }}</strong> {{ t('Your own address is kept when the list is switched on, and you cannot remove the entry that lets you in. Locked out anyway? Run {cmd} in the Proxmox console.', cmd='kms-ctl access-reset') }}</div>
+</section>
+
+{% else %}
+<section class="card">
+  <div class="card-head"><h2>{{ t('Who may activate with this KMS server') }}</h2>
+    <form method="post" action="{{ url_for('main.network_kms') }}" class="segmented" role="group" aria-label="{{ t('Default rule') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" name="restrict" value="1" class="{{ 'is-on' if s.kms_restrict }}" aria-pressed="{{ 'true' if s.kms_restrict else 'false' }}">{{ t('Only the list below') }}</button>
+      <button type="submit" name="restrict" value="0" class="{{ 'is-on' if not s.kms_restrict }}" aria-pressed="{{ 'false' if s.kms_restrict else 'true' }}">{{ t('Everyone (not advised)') }}</button>
+    </form>
+  </div>
+  {% if not s.kms_restrict %}<p class="muted small">{{ t('Right now every address that can reach port {port} may activate. Add your networks below, then switch to "Only the list below".', port=kms_port) }}</p>{% endif %}
+  {{ acl_table('kms', s.kms_acl, activity) }}
+  {% if lan and not s.kms_acl %}
+  <form method="post" action="{{ url_for('main.network_acl') }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="scope" value="kms"><input type="hidden" name="action" value="add"><input type="hidden" name="cidr" value="{{ lan }}"><input type="hidden" name="descr" value="Local network">
+    <button class="btn btn-sm" type="submit">{{ t('Add the local network ({net})', net=lan) }}</button>
+  </form>
+  {% endif %}
+  <div class="grid g2">
+    <div class="callout"><strong>{{ t('Public addresses get a warning.') }}</strong> {{ t('Only add a single fixed IP of a site you know. A public range wider than /24, or 0.0.0.0/0, is refused. A VPN between sites stays the safest choice.') }}</div>
+    <div class="callout callout-info"><strong>{{ t('Blocked attempts are logged.') }}</strong> {{ t('You see them below for 7 days, and can get an email when an unknown address keeps trying.') }}</div>
+  </div>
+</section>
+
+{% if s.kms_restrict %}
+<section class="card">
+  <div class="card-head"><h2>{{ t('Recently blocked') }}</h2>
+    {% if mail_on %}<span class="badge {{ 'b-ok' if notify_blocked else 'b-neutral' }}">{{ t('Email on') if notify_blocked else t('Email off') }}</span>{% endif %}
+    <a class="btn btn-sm" href="{{ url_for('main.mail') }}">{{ t('Mail settings') }}</a></div>
+  {% for b in blocked %}
+  <form class="row" method="post" action="{{ url_for('main.network_acl') }}" style="padding:10px 14px;border:1px solid var(--line-soft);border-radius:10px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="scope" value="kms"><input type="hidden" name="action" value="add"><input type="hidden" name="cidr" value="{{ b.ip }}"><input type="hidden" name="descr" value="Allowed from the blocked list">
+    <span class="mono" style="min-width:160px">{{ b.ip }}</span>
+    <span class="muted" style="margin-right:auto">{{ t('{n} attempts', n=b.attempts) }}</span>
+    <button class="btn btn-sm" type="submit">{{ t('Allow') }}</button>
+  </form>
+  {% else %}
+  <p class="muted small">{{ t('Nothing blocked in the last 7 days.') }}</p>
+  {% endfor %}
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
