@@ -157,3 +157,14 @@ def test_caddy_switch_keeps_console_open(client):
     from kmsconsole import store
     client.post("/network/mode", data={"mode": "caddy", "domain": "kms.example.nl", "close_console": "on"})
     assert store.get("net.mode") == "caddy" and store.get("net.close_console") is False
+
+
+def test_blocked_parses_real_nft_output(monkeypatch):
+    from kmsconsole import network, system
+    raw = ('{"nftables": [{"metainfo": {"version": "1.1.3", "json_schema_version": 1}}, {"set": {"family": "inet", '
+           '"name": "blocked4", "table": "kmsconsole", "type": "ipv4_addr", "handle": 8, "size": 65535, "flags": ["timeout", "dynamic"], '
+           '"timeout": 604800, "elem": [{"elem": {"val": "10.10.4.3", "expires": 604796, "counter": {"packets": 9, "bytes": 540}}}]}}]}\n\n'
+           '{"nftables": [{"metainfo": {"version": "1.1.3", "json_schema_version": 1}}, {"set": {"family": "inet", "name": "blocked6", '
+           '"table": "kmsconsole", "type": "ipv6_addr", "handle": 12, "size": 65535, "flags": ["timeout", "dynamic"], "timeout": 604800}}]}\n')
+    monkeypatch.setattr(system, "ctl", lambda *a, **k: raw)
+    assert network.blocked() == [{"ip": "10.10.4.3", "attempts": 9, "expires": 604796}]
