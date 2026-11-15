@@ -246,6 +246,32 @@ def check_blocked(threshold=20):
     store.set("net.blocked_alerted", alerted)
 
 
+# ------------------------------------------------------------------ KMS name
+
+def resolve(name):
+    """Addresses a hostname resolves to from inside the container (empty list when it does not resolve)."""
+    try:
+        ipaddress.ip_address(name)
+        return [name]
+    except ValueError:
+        pass
+    try:
+        return sorted({info[4][0] for info in socket.getaddrinfo(name, None, proto=socket.IPPROTO_TCP)})
+    except (OSError, UnicodeError):
+        return []
+
+
+def name_check(name):
+    """Does the KMS name lead clients to this container? Port 1688 is never proxied, so it must."""
+    if not name:
+        return {"state": "ip", "addrs": []}
+    addrs = resolve(name)
+    if not addrs:
+        return {"state": "unresolved", "addrs": []}
+    own = kms.detect_ip()
+    return {"state": "ok" if own in addrs else "other", "addrs": addrs}
+
+
 # ------------------------------------------------------------------ HTTPS check
 
 def check_https(domain, timeout=6):

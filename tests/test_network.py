@@ -168,3 +168,18 @@ def test_blocked_parses_real_nft_output(monkeypatch):
            '"table": "kmsconsole", "type": "ipv6_addr", "handle": 12, "size": 65535, "flags": ["timeout", "dynamic"], "timeout": 604800}}]}\n')
     monkeypatch.setattr(system, "ctl", lambda *a, **k: raw)
     assert network.blocked() == [{"ip": "10.10.4.3", "attempts": 9, "expires": 604796}]
+
+
+def test_kms_name_goes_into_scripts(client, monkeypatch):
+    from kmsconsole import network, store
+    monkeypatch.setattr(network, "resolve", lambda name: ["10.10.4.113"])
+    monkeypatch.setattr(network.kms, "detect_ip", lambda: "10.10.4.113")
+    client.post("/network/kms-name", data={"kms_name": "KMS.Example.lan."})
+    assert store.get("kms.public_host") == "kms.example.lan"
+    assert b"/skms kms.example.lan:1688" in client.get("/activation/download/windows-cmd").data
+    page = client.get("/network").get_data(as_text=True)
+    assert "Points to this container" in page
+    monkeypatch.setattr(network, "resolve", lambda name: ["203.0.113.5"])
+    assert "Points elsewhere" in client.get("/network").get_data(as_text=True)
+    client.post("/network/kms-name", data={"kms_name": "bad name;rm"})
+    assert store.get("kms.public_host") == "kms.example.lan"

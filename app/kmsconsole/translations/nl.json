@@ -448,5 +448,19 @@
   "you would lock yourself out: your own address is not covered by the remaining entries": "je zou jezelf buitensluiten: je eigen adres valt niet onder de overige regels",
   "the last entry cannot be removed while the KMS list is switched on": "de laatste regel kan niet worden verwijderd zolang de KMS-lijst aan staat",
   "open the web interface through https://your-domain first, then close port 8080": "open de webinterface eerst via https://jouw-domein en sluit daarna poort 8080",
-  "you would lock yourself out: add your own address to the web access list first, or open this page through the proxy": "je zou jezelf buitensluiten: voeg eerst je eigen adres toe aan de web-accesslist, of open deze pagina via de proxy"
+  "you would lock yourself out: add your own address to the web access list first, or open this page through the proxy": "je zou jezelf buitensluiten: voeg eerst je eigen adres toe aan de web-accesslist, of open deze pagina via de proxy",
+  "not a valid hostname or IP address": "geen geldige hostnaam of IP-adres",
+  "Saved, but {name} points to {addrs}, not to this container ({ip}). Port {port} is not passed through a proxy, so clients would not reach the KMS server.": "Opgeslagen, maar {name} wijst naar {addrs} en niet naar deze container ({ip}). Poort {port} gaat niet via een proxy, dus clients bereiken de KMS-server dan niet.",
+  "Saved. {name} does not resolve yet from this container; add it to your DNS.": "Opgeslagen. {name} is vanuit deze container nog niet op te zoeken; zet hem in je DNS.",
+  "Saved. The activation scripts now use {name}.": "Opgeslagen. De activatiescripts gebruiken nu {name}.",
+  "Name in the activation scripts": "Naam in de activatiescripts",
+  "Points to this container": "Wijst naar deze container",
+  "Points elsewhere": "Wijst ergens anders heen",
+  "Not in DNS yet": "Nog niet in DNS",
+  "Using the IP address": "Gebruikt het IP-adres",
+  "Hostname clients use for KMS": "Hostnaam die clients voor KMS gebruiken",
+  "Used in every activation script, the GPO and the DNS examples. Leave empty to use {ip}.": "Wordt gebruikt in elk activatiescript, de GPO en de DNS-voorbeelden. Laat leeg om {ip} te gebruiken.",
+  "{name} points to {addrs}, not to this container ({ip}). Port {port} is not passed through a proxy, so use a name that points straight to {ip}, for example kms.your-domain inside your LAN.": "{name} wijst naar {addrs} en niet naar deze container ({ip}). Poort {port} gaat niet via een proxy, dus gebruik een naam die rechtstreeks naar {ip} wijst, bijvoorbeeld kms.jouw-domein binnen je LAN.",
+  "The web interface can have a public name through {via}, but port {port} always goes straight to this container. Give clients a name that points to {ip}, or the same name when your DNS gives the LAN this address.": "De webinterface kan via {via} een publieke naam hebben, maar poort {port} gaat altijd rechtstreeks naar deze container. Geef clients een naam die naar {ip} wijst, of dezelfde naam als je DNS het LAN dit adres geeft.",
+  "your proxy": "je proxy"
 }

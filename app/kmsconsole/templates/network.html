@@ -89,6 +89,25 @@
   <div class="row"><button class="btn btn-primary" type="submit">{{ t('Save and apply') }}</button></div>
 </form>
 
+<form class="card" id="kms-name" method="post" action="{{ url_for('main.network_kms_name') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card-head"><h2>{{ t('Name in the activation scripts') }}</h2>
+    {% if name_check.state == 'ok' %}<span class="badge b-ok">{{ t('Points to this container') }}</span>
+    {% elif name_check.state == 'other' %}<span class="badge b-attention">{{ t('Points elsewhere') }}</span>
+    {% elif name_check.state == 'unresolved' %}<span class="badge b-pending">{{ t('Not in DNS yet') }}</span>
+    {% else %}<span class="badge b-neutral">{{ t('Using the IP address') }}</span>{% endif %}</div>
+  <div class="acl-add">
+    <label class="f grow">{{ t('Hostname clients use for KMS') }}<input type="text" name="kms_name" class="mono" value="{{ kms_name }}" placeholder="{{ host_ip }}" autocomplete="off"></label>
+    <button class="btn btn-primary" type="submit">{{ t('Save') }}</button>
+  </div>
+  <p class="muted small" style="margin:0">{{ t('Used in every activation script, the GPO and the DNS examples. Leave empty to use {ip}.', ip=host_ip) }}</p>
+  {% if name_check.state == 'other' %}
+  <div class="callout">{{ t('{name} points to {addrs}, not to this container ({ip}). Port {port} is not passed through a proxy, so use a name that points straight to {ip}, for example kms.your-domain inside your LAN.', name=kms_name, addrs=name_check.addrs|join(', '), ip=host_ip, port=kms_port) }}</div>
+  {% elif s.mode != 'lan' %}
+  <p class="muted small">{{ t('The web interface can have a public name through {via}, but port {port} always goes straight to this container. Give clients a name that points to {ip}, or the same name when your DNS gives the LAN this address.', via=('Caddy' if s.mode == 'caddy' else t('your proxy')), port=kms_port, ip=host_ip) }}</p>
+  {% endif %}
+</form>
+
 <section class="card">
   <div class="card-head"><h2>{{ t('Who may open the web interface') }}</h2>
     {% if s.web_acl %}<span class="badge b-inc">{{ t('Everything else is blocked') }}</span>{% else %}<span class="badge b-neutral">{{ t('Open to everyone who can reach it') }}</span>{% endif %}</div>

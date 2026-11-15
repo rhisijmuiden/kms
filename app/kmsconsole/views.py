@@ -683,7 +683,10 @@ def network_page():
            "console_port": config.PORT, "kms_port": store.get("kms.port"), "host_ip": kms.detect_ip(),
            "via_proxy": bool(request.environ.get("kms.proxy_addr")), "is_https": request.is_secure,
            "https_check": store.get("net.https_check") or {}, "mail_on": store.get("mail.enabled"),
-           "notify_blocked": store.get("mail.notify_blocked")}
+           "notify_blocked": store.get("mail.notify_blocked"),
+           "kms_name": (store.get("kms.public_host") or "").strip()}
+    if tab == "web":
+        ctx["name_check"] = network.name_check(ctx["kms_name"])
     for e in s["kms_acl"]:
         try:
             e["public"] = network.parse_entry(e["cidr"])[1]
@@ -774,6 +777,25 @@ def network_kms():
         flash(_t("Only addresses on the list can use the KMS server now.") if restrict
               else _t("Every address can use the KMS server again."), "ok")
     return redirect(url_for("main.network", tab="kms"))
+
+
+@bp.route("/network/kms-name", methods=["POST"])
+@login_required
+def network_kms_name():
+    name = (request.form.get("kms_name") or "").strip().lower().rstrip(".")
+    if not _HOST_RE.match(name):
+        flash(_t("Not saved: {err}", err=_t("not a valid hostname or IP address")), "error")
+        return redirect(url_for("main.network"))
+    store.set("kms.public_host", name)
+    check = network.name_check(name)
+    if check["state"] == "other":
+        flash(_t("Saved, but {name} points to {addrs}, not to this container ({ip}). Port {port} is not passed through a proxy, so clients would not reach the KMS server.",
+                 name=name, addrs=", ".join(check["addrs"]), ip=kms.detect_ip(), port=store.get("kms.port")), "error")
+    elif check["state"] == "unresolved":
+        flash(_t("Saved. {name} does not resolve yet from this container; add it to your DNS.", name=name), "ok")
+    else:
+        flash(_t("Saved. The activation scripts now use {name}.", name=name or kms.detect_ip()), "ok")
+    return redirect(url_for("main.network") + "#kms-name")
 
 
 @bp.route("/network/test-https", methods=["POST"])
