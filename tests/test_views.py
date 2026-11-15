@@ -85,3 +85,14 @@ def test_eval_download_keeps_target(client):
     assert b'set "TARGET=ServerDatacenter"' in r.data
     page = client.get("/activation?tab=eval").get_data(as_text=True)
     assert "convert-eval-and-activate.ps1" in page and "DISM" in page
+
+
+def test_server_product_points_to_eval_tab(client):
+    from kmsconsole import kms
+    sku = next(s for g in kms.catalog() for s in g["skus"] if s["name"] == "Windows Server 2025 Standard") if kms.catalog() else None
+    if sku is None:
+        return
+    page = client.get(f"/activation?tab=windows&sku={sku['id']}").get_data(as_text=True)
+    assert "tab=eval" in page and "target=ServerStandard" in page
+    page = client.get("/activation?tab=eval").get_data(as_text=True)
+    assert "TVRH6-WHNXV-R9WG3-9XRFY-MY832" in page and "D764K-2NDRG-47T6Q-P8T8W-YP6DF" in page and "26100" in page

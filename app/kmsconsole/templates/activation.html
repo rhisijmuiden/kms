@@ -18,7 +18,7 @@
 <section class="card">
   <form class="row" method="get" action="{{ url_for('main.activation') }}">
     <div class="segmented" role="tablist" aria-label="{{ t('Script type') }}">
-      {% for key, label in [('windows', 'Windows'), ('eval', 'Evaluation to full'), ('office', 'Office'), ('gpo', 'GPO / registry'), ('dns', 'DNS (auto discovery)')] %}
+      {% for key, label in [('windows', 'Windows'), ('eval', 'Server Evaluation to full'), ('office', 'Office'), ('gpo', 'GPO / registry'), ('dns', 'DNS (auto discovery)')] %}
       <a role="tab" aria-selected="{{ 'true' if tab == key else 'false' }}" class="{{ 'is-on' if tab == key }}" href="{{ url_for('main.activation', tab=key, fmt=fmt) }}">{{ t(label) }}</a>
       {% endfor %}
     </div>
@@ -60,6 +60,10 @@
     {% else %}{{ t('With this SRV record, clients find the server by themselves. No script needed, only the volume key.') }}{% endif %}
     {% if key %}<br>{{ t('Volume key for {product}:', product=product) }} <span class="kbd">{{ key }}</span>{% endif %}
   </p>
+  {% if tab == 'windows' and 'Windows Server' in product %}
+  <div class="callout callout-info"><strong>{{ t('Is this server an Evaluation install?') }}</strong> {{ t('This script only works on a full edition. For an Evaluation install, use the Server Evaluation to full tab: it converts the server with DISM and the right key, then activates it.') }}
+    <a href="{{ url_for('main.activation', tab='eval', target=('ServerDatacenter' if 'Datacenter' in product else 'ServerStandard')) }}">{{ t('Open Server Evaluation to full') }} →</a></div>
+  {% endif %}
 
   <div class="code">
     <div class="code-head">
@@ -86,7 +90,15 @@
     <span class="kbd">ServerDatacenterEval → ServerDatacenter</span>
     <span class="kbd">ServerStandardEval → ServerDatacenter</span>
   </div>
-  <p class="muted small">{{ t('Already a full edition? Then the script only installs the volume key and activates, without a restart.') }}</p>
+  <div class="table-card">
+    <table>
+      <thead><tr><th>{{ t('Version') }}</th><th>{{ t('Build') }}</th><th>Standard (GVLK)</th><th>Datacenter (GVLK)</th></tr></thead>
+      <tbody>{% for build, (name, keys) in server_keys %}
+        <tr><td class="strong">{{ name }}</td><td class="muted">{{ build }}</td><td class="mono">{{ keys.ServerStandard }}</td><td class="mono">{{ keys.ServerDatacenter }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  <p class="muted small">{{ t('The script reads the build number and picks the matching key itself, so the same file works for every version in this table.') }} {{ t('Already a full edition? Then the script only installs the volume key and activates, without a restart.') }}</p>
   <div class="grid g2" style="gap:12px">
     <div class="callout"><strong>{{ t('Not for domain controllers.') }}</strong> {{ t('Microsoft does not support converting an Evaluation domain controller. The script stops without changing anything. Demote it first, or move the role to another server.') }}</div>
     <div class="callout"><strong>{{ t('Windows 10/11 Enterprise Evaluation') }}</strong> {{ t('cannot be converted with DISM. The script detects it and stops. Those PCs need a fresh install from volume license media.') }}</div>

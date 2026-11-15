@@ -13,7 +13,7 @@
 </form>
 {% for grp in groups %}
 <section class="card" style="gap:10px">
-  <div class="card-head"><h2>{{ grp.name }}</h2><span class="badge b-neutral">{{ 'Office' if grp.kind == 'office' else 'Windows' }}</span>{% if grp.retail %}<span class="badge b-pending">{{ t('Retail keys, cannot use KMS') }}</span>{% endif %}</div>
+  <div class="card-head"><h2>{{ grp.name }}</h2><span class="badge b-neutral">{{ 'Office' if grp.kind == 'office' else 'Windows' }}</span>{% if grp.retail %}<span class="badge b-pending">{{ t('Retail keys, cannot use KMS') }}</span>{% endif %}{% if 'Server' in grp.name and not grp.retail %}<a class="btn btn-sm" href="{{ url_for('main.activation', tab='eval') }}">{{ t('Convert an Evaluation install') }}</a>{% endif %}</div>
   <div class="table-wrap"><table style="min-width:620px">
     <thead><tr><th>{{ t('Product') }}</th><th>GVLK</th><th><span class="sr">{{ t('Actions') }}</span></th></tr></thead>
     <tbody>{% for s in grp.skus %}
