@@ -462,5 +462,12 @@
   "Used in every activation script, the GPO and the DNS examples. Leave empty to use {ip}.": "Wordt gebruikt in elk activatiescript, de GPO en de DNS-voorbeelden. Laat leeg om {ip} te gebruiken.",
   "{name} points to {addrs}, not to this container ({ip}). Port {port} is not passed through a proxy, so use a name that points straight to {ip}, for example kms.your-domain inside your LAN.": "{name} wijst naar {addrs} en niet naar deze container ({ip}). Poort {port} gaat niet via een proxy, dus gebruik een naam die rechtstreeks naar {ip} wijst, bijvoorbeeld kms.jouw-domein binnen je LAN.",
   "The web interface can have a public name through {via}, but port {port} always goes straight to this container. Give clients a name that points to {ip}, or the same name when your DNS gives the LAN this address.": "De webinterface kan via {via} een publieke naam hebben, maar poort {port} gaat altijd rechtstreeks naar deze container. Geef clients een naam die naar {ip} wijst, of dezelfde naam als je DNS het LAN dit adres geeft.",
-  "your proxy": "je proxy"
+  "your proxy": "je proxy",
+  "Server Evaluation to full": "Server Evaluatie naar volledig",
+  "Is this server an Evaluation install?": "Is deze server een Evaluatie-installatie?",
+  "This script only works on a full edition. For an Evaluation install, use the Server Evaluation to full tab: it converts the server with DISM and the right key, then activates it.": "Dit script werkt alleen op een volledige editie. Gebruik voor een Evaluatie-installatie het tabblad Server Evaluatie naar volledig: dat zet de server met DISM en de juiste sleutel om en activeert hem daarna.",
+  "Open Server Evaluation to full": "Server Evaluatie naar volledig openen",
+  "Build": "Build",
+  "The script reads the build number and picks the matching key itself, so the same file works for every version in this table.": "Het script leest het buildnummer en kiest zelf de juiste sleutel, dus hetzelfde bestand werkt voor elke versie in deze tabel.",
+  "Convert an Evaluation install": "Evaluatie-installatie omzetten"
 }

@@ -253,6 +253,7 @@ def activation():
                            port=args["port"], key=args["key"], product=args["product"], domain=args["domain"],
                            target=args["target"], eval_targets=scripts.EVAL_TARGETS,
                            server_versions=[v[0] for v in scripts.SERVER_GVLK.values()],
+                           server_keys=sorted(scripts.SERVER_GVLK.items(), reverse=True),
                            host_is_ip=bool(re.match(r"^[0-9.]+$", args["host"]) or ":" in args["host"]))
 
 
