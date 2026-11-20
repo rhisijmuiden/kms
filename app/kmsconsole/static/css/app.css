@@ -232,3 +232,18 @@ dl.facts dd{margin:0;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .acl-add .f.grow{flex:2 1 260px}
 .mono{font-family:var(--font-mono);font-size:13px}
 @media (max-width:1100px){.modes{grid-template-columns:minmax(0,1fr)}}
+
+/* Install Office (ODT) tab */
+.odt-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;padding:20px;border:1px solid var(--line);border-radius:14px;background:#FAFCFC}
+.odt-form .f{grid-column:auto}
+.odt-form fieldset{border:0;margin:0;padding:0}
+.odt-form legend{padding:0;margin-bottom:6px;font-size:13px;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid var(--line);background:var(--raised);border-radius:999px;font-size:14px;font-weight:500;cursor:pointer}
+.chip:has(input:checked){border-color:#B9E2DD;background:var(--info-bg)}
+.chip input{accent-color:var(--lagoon);margin:0}
+.odt-remove{align-self:end;align-items:flex-start}.odt-remove input{margin-top:2px;flex:none}.odt-remove small{font-weight:400;color:var(--slate)}
+.file-tabs{display:inline-flex;gap:4px;margin-right:auto;flex-wrap:wrap}
+.file-tabs a{min-height:34px;padding:0 12px;border-radius:8px;color:#A9BCC1;font:600 13px var(--font-mono);text-decoration:none;display:inline-flex;align-items:center}
+.file-tabs a.is-on,.file-tabs a:hover{background:var(--abyss-2);color:#fff}
+@media (max-width:760px){.odt-form{grid-template-columns:minmax(0,1fr)}}

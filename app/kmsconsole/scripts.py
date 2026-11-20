@@ -1,10 +1,12 @@
 """Generates client activation scripts that point to this KMS container."""
 import re
 
+from . import odt as odt_mod
+
 _HOST_RE = re.compile(r"^[A-Za-z0-9.\-:\[\]]{1,253}$")
 _KEY_RE = re.compile(r"^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$")
 
-TYPES = ["windows-cmd", "windows-ps1", "eval-cmd", "eval-ps1", "office-cmd", "office-ps1", "reg", "gpo", "dns", "status"]
+TYPES = ["windows-cmd", "windows-ps1", "eval-cmd", "eval-ps1", "office-cmd", "office-ps1", "odt-ps1", "odt-xml", "reg", "gpo", "dns", "status"]
 
 FILENAMES = {
     "windows-cmd": "activate-windows.cmd",
@@ -13,6 +15,8 @@ FILENAMES = {
     "eval-ps1": "convert-eval-and-activate.ps1",
     "office-cmd": "activate-office.cmd",
     "office-ps1": "activate-office.ps1",
+    "odt-ps1": "install-office.ps1",
+    "odt-xml": "configuration.xml",
     "reg": "kms-server.reg",
     "gpo": "kms-gpo.ps1",
     "dns": "kms-dns-srv.txt",
@@ -295,7 +299,7 @@ def crlf(text):
     return text.replace("\r\n", "\n").replace("\n", "\r\n")
 
 
-def generate(kind, host, port, key="", product="", office_dir="Office16", domain="lan", target="auto"):
+def generate(kind, host, port, key="", product="", office_dir="Office16", domain="lan", target="auto", odt=None):
     host = safe_host(host)
     port = int(port)
     key = safe_key(key)
@@ -336,6 +340,15 @@ cscript //nologo $slmgr /xpr
 
     if kind in ("eval-ps1", "eval-cmd"):
         return _eval_script(kind, host, port, hp, target)
+
+    if kind in ("odt-ps1", "odt-xml"):
+        opts = odt or odt_mod.options()
+        if kind == "odt-ps1":
+            return crlf(odt_mod.install_script(opts, host, hp, port))
+        head = (f"<!-- KMS Console - {odt_mod.EDITIONS[opts['edition']][0]} with the KMS client key.\n"
+                f"     Install: setup.exe /configure configuration.xml (ODT from {odt_mod.SETUP_URL})\n"
+                f"     Then activate against {hp}: OSPP.VBS /sethst:{host} /setprt:{port} /act -->\n")
+        return crlf(head + odt_mod.configuration_xml(opts))
 
     if kind == "office-cmd":
         inpkey = f'cscript //nologo "%OSPP%" /inpkey:{key}\n' if key else ":: Keeping the current Office key (no GVLK selected)\n"

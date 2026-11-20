@@ -18,7 +18,7 @@
 <section class="card">
   <form class="row" method="get" action="{{ url_for('main.activation') }}">
     <div class="segmented" role="tablist" aria-label="{{ t('Script type') }}">
-      {% for key, label in [('windows', 'Windows'), ('eval', 'Server Evaluation to full'), ('office', 'Office'), ('gpo', 'GPO / registry'), ('dns', 'DNS (auto discovery)')] %}
+      {% for key, label in [('windows', 'Windows'), ('eval', 'Server Evaluation to full'), ('office', 'Office'), ('odt', 'Install Office'), ('gpo', 'GPO / registry'), ('dns', 'DNS (auto discovery)')] %}
       <a role="tab" aria-selected="{{ 'true' if tab == key else 'false' }}" class="{{ 'is-on' if tab == key }}" href="{{ url_for('main.activation', tab=key, fmt=fmt) }}">{{ t(label) }}</a>
       {% endfor %}
     </div>
@@ -43,7 +43,7 @@
       <input type="hidden" name="fmt" value="{{ fmt }}">
     </label>
     {% endif %}
-    {% if tab != 'dns' %}
+    {% if tab not in ('dns', 'odt') %}
     <div class="segmented" role="group" aria-label="{{ t('Format') }}">
       <a class="{{ 'is-on' if fmt != 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, target=target, fmt='cmd') }}">{{ '.cmd' if tab != 'gpo' else '.reg' }}</a>
       <a class="{{ 'is-on' if fmt == 'ps1' }}" href="{{ url_for('main.activation', tab=tab, sku=sku_id, target=target, fmt='ps1') }}">{{ 'PowerShell' if tab != 'gpo' else 'GPO (PowerShell)' }}</a>
@@ -52,12 +52,66 @@
     <noscript><button class="btn" type="submit">{{ t('Show') }}</button></noscript>
   </form>
 
+  {% if tab == 'odt' %}
+  <form class="odt-form" method="get" action="{{ url_for('main.activation') }}">
+    <input type="hidden" name="tab" value="odt">
+    <input type="hidden" name="set" value="1">
+    <input type="hidden" name="fmt" value="{{ fmt }}">
+    <label class="f">{{ t('Office edition') }}
+      <select name="edition" data-autosubmit>
+        {% for version in ('2024', '2021', '2019') %}
+        <optgroup label="Office {{ 'LTSC ' if version != '2019' }}{{ version }}">
+          {% for eid, (ename, ekey, echannel, ever) in odt.EDITIONS.items() if ever == version %}
+          <option value="{{ eid }}"{% if eid == odt_opts.edition %} selected{% endif %}>{{ ename }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+      <small>{{ t('Key') }}: <span class="mono">{{ odt.EDITIONS[odt_opts.edition][1] }}</span> · {{ t('channel') }} {{ odt.EDITIONS[odt_opts.edition][2] }}</small>
+    </label>
+    <label class="f">{{ t('Language') }}
+      <select name="lang" data-autosubmit>
+        {% for lid, lname in odt.LANGUAGES.items() %}<option value="{{ lid }}"{% if lid == odt_opts.language %} selected{% endif %}>{{ t(lname) }}</option>{% endfor %}
+      </select>
+    </label>
+    <fieldset class="f">
+      <legend>{{ t('Apps') }}</legend>
+      <div class="chips">
+        {% for app in odt.apps_for(odt_opts.edition) %}
+        <label class="chip"><input type="checkbox" name="app" value="{{ app }}" data-autosubmit{% if app in odt_opts.apps %} checked{% endif %}>{{ odt.APP_LABELS.get(app, app) }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <fieldset class="f">
+      <legend>{{ t('Also install (same version)') }}</legend>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" name="visio" value="1" data-autosubmit{% if odt_opts.visio %} checked{% endif %}>Visio Professional</label>
+        <label class="chip"><input type="checkbox" name="project" value="1" data-autosubmit{% if odt_opts.project %} checked{% endif %}>Project Professional</label>
+      </div>
+      <small>{{ t('Each one gets its own KMS client key.') }}</small>
+    </fieldset>
+    <fieldset class="f">
+      <legend>{{ t('Architecture') }}</legend>
+      <div class="chips">
+        {% for a in odt.ARCHS %}<label class="chip"><input type="radio" name="arch" value="{{ a }}" data-autosubmit{% if a == odt_opts.arch %} checked{% endif %}>{{ a }}-bit</label>{% endfor %}
+      </div>
+    </fieldset>
+    <label class="check odt-remove">
+      <input type="checkbox" name="remove" value="1" data-autosubmit{% if odt_opts.remove %} checked{% endif %}>
+      <span>{{ t('Remove other Office versions first') }}<br><small>{{ t('Removes a preinstalled Microsoft 365 or retail Office and old MSI installs, otherwise ODT stops.') }}</small></span>
+    </label>
+    <noscript><button class="btn" type="submit">{{ t('Show') }}</button></noscript>
+  </form>
+  {% endif %}
+
   <p class="muted small">
     {% if tab == 'windows' %}{{ t('Run this file as administrator. It installs the key, sets the KMS server and activates.') }}
     {% elif tab == 'eval' %}{{ t('One script for an Evaluation install of {versions}. It detects the edition and version, converts it to the full volume license edition with DISM, restarts once and then activates against this KMS server by itself.', versions=server_versions|join(', ')) }}
     {% elif tab == 'office' %}{{ t('Works for Office 2010 to LTSC 2024 volume license editions. The script finds OSPP.VBS by itself, then sets the server and activates.') }}
+    {% elif tab == 'odt' %}{{ t('Installs a volume license edition of Office with the Office Deployment Tool (ODT), straight from the Microsoft CDN. The script uses the public KMS client key (GVLK), points Office to this server and activates. No ISO or MSI needed.') }}
     {% elif tab == 'gpo' %}{{ t('Import on one PC, or roll out the same values to every PC with a Group Policy.') }}
     {% else %}{{ t('With this SRV record, clients find the server by themselves. No script needed, only the volume key.') }}{% endif %}
+    {% if tab == 'odt' %}<br>{{ t('Installs:') }} {% for pid, pname, pkey in odt_products %}<span class="kbd">{{ pname }}</span> {% endfor %}{% endif %}
     {% if key %}<br>{{ t('Volume key for {product}:', product=product) }} <span class="kbd">{{ key }}</span>{% endif %}
   </p>
   {% if tab == 'windows' and 'Windows Server' in product %}
@@ -67,9 +121,17 @@
 
   <div class="code">
     <div class="code-head">
+      {% if tab == 'odt' %}
+      <span class="file-tabs" role="tablist" aria-label="{{ t('File') }}">
+        {% for f, fname in (('ps1', 'install-office.ps1'), ('xml', 'configuration.xml')) %}
+        <a role="tab" aria-selected="{{ 'true' if fmt == f else 'false' }}" class="{{ 'is-on' if fmt == f }}" href="{{ url_for('main.activation', tab='odt', fmt=f, **odt_query) }}">{{ fname }}</a>
+        {% endfor %}
+      </span>
+      {% else %}
       <span class="fname">{{ filename }}</span>
+      {% endif %}
       <button type="button" class="btn btn-sm btn-ghost-dark" data-copy="#script-code">{{ t('Copy') }}</button>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('main.activation_download', kind=kind, sku=sku_id, target=target) }}">{{ icon('download') }}{{ t('Download') }}</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('main.activation_download', kind=kind, sku=sku_id, target=target, **odt_query) }}">{{ icon('download') }}{{ t('Download') }}</a>
     </div>
     <pre id="script-code">{{ code }}</pre>
   </div>
@@ -104,6 +166,24 @@
     <div class="callout"><strong>{{ t('Windows 10/11 Enterprise Evaluation') }}</strong> {{ t('cannot be converted with DISM. The script detects it and stops. Those PCs need a fresh install from volume license media.') }}</div>
   </div>
   <div class="callout callout-info">{{ t('The log is written to {path}. Check the result with slmgr /dlv after the restart, or look for the server under Clients.', path='C:\\ProgramData\\KMSConsole\\activation.log') }}</div>
+</section>
+{% endif %}
+
+{% if tab == 'odt' %}
+<section class="card" id="odt">
+  <div class="card-head"><h2>{{ t('How the install works') }}</h2><span class="badge b-neutral">Office Deployment Tool</span></div>
+  <div class="grid g4" style="gap:12px">
+    <div class="step"><span class="n">1</span><strong>{{ t('Download ODT') }}</strong><p>{{ t('Gets setup.exe from the Microsoft Office CDN and checks that it is signed by Microsoft.') }}</p></div>
+    <div class="step"><span class="n">2</span><strong>{{ t('Write configuration.xml') }}</strong><p>{{ t('Edition, KMS client key, language, apps and update channel, exactly as chosen above. Other Office versions are removed first when that option is on.') }}</p></div>
+    <div class="step"><span class="n">3</span><strong>{{ t('Install Office') }}</strong><p>{{ t('setup.exe /configure downloads and installs Office. This takes 5 to 15 minutes.') }}</p></div>
+    <div class="step"><span class="n">4</span><strong>{{ t('Activate with KMS') }}</strong><p>{{ t('OSPP.VBS points Office to {host}:{port}, activates and retries for 5 minutes if needed.', host=host, port=port) }}</p></div>
+  </div>
+  <p class="muted small">{{ t('Every choice is also a parameter, so one file works for other PCs too, for example:') }} <span class="kbd">.\install-office.ps1 -Edition Standard2021Volume -Language nl-nl -Arch 32 -Visio</span></p>
+  <div class="grid g2" style="gap:12px">
+    <div class="callout"><strong>{{ t('Internet needed on the client.') }}</strong> {{ t('ODT downloads about 3 GB from the Microsoft CDN. No internet? Download the files once with setup.exe /download configuration.xml and run the script with -SourcePath and -SetupPath pointing to that share.') }}</div>
+    <div class="callout"><strong>{{ t('Only volume license editions.') }}</strong> {{ t('Microsoft 365 Apps and retail Office cannot use KMS. That is why the script removes them first, unless you turn that off.') }}</div>
+  </div>
+  <div class="callout callout-info">{{ t('The log is written to {path}. The PC shows up under Clients once Office has activated.', path='C:\\ProgramData\\KMSConsole\\office-install.log') }}</div>
 </section>
 {% endif %}
 

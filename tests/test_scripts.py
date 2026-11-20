@@ -87,3 +87,47 @@ def test_eval_keys_match_catalog():
     for name, keys in scripts.SERVER_GVLK.values():
         assert names[f"{name} Standard"] == keys["ServerStandard"]
         assert names[f"{name} Datacenter"] == keys["ServerDatacenter"]
+
+
+def test_odt_script_defaults():
+    out = scripts.generate("odt-ps1", host="10.10.4.113", port=1688)
+    assert '$Edition  = "ProPlus2024Volume"' in out
+    assert "XJ2XN-FW8RK-P4HMP-DKDBV-GCVGB" in out
+    assert "officecdn.microsoft.com/pr/wsus/setup.exe" in out
+    assert "Get-AuthenticodeSignature" in out
+    assert "/sethst:$KmsHost" in out and '$KmsHost  = "10.10.4.113"' in out and "$KmsPort  = 1688" in out
+    assert "\r\n" in out and "__" not in out.replace("__HP__", "")
+
+
+def test_odt_xml_follows_options():
+    from kmsconsole import odt
+    opts = odt.options(edition="Standard2021Volume", language="en-us,nl-nl", arch="32",
+                       apps=["Word", "Excel", "Publisher"], visio=True, project=True)
+    out = scripts.generate("odt-xml", host="kms.lan", port=1688, odt=opts)
+    assert 'OfficeClientEdition="32"' in out and 'Channel="PerpetualVL2021"' in out
+    assert 'Product ID="Standard2021Volume" PIDKEY="KDX7X-BNVR8-TXXGX-4Q7Y8-78VT3"' in out
+    assert 'Product ID="VisioPro2021Volume" PIDKEY="KNH8D-FGHT4-T8RK3-CTDYJ-K2HT4"' in out
+    assert 'Product ID="ProjectPro2021Volume" PIDKEY="FTNWT-C6WBT-8HMGF-K9PRX-QV9H8"' in out
+    assert '<Language ID="nl-nl" />' in out and '<ExcludeApp ID="Outlook" />' in out
+    assert '<ExcludeApp ID="Publisher" />' not in out and '<ExcludeApp ID="Groove" />' in out
+    import xml.etree.ElementTree as ET
+    ET.fromstring(out.replace("\r\n", "\n"))
+
+
+def test_odt_options_are_validated():
+    from kmsconsole import odt
+    opts = odt.options(edition="Evil", language="x", arch="128", apps=["Word", "rm -rf"])
+    assert opts["edition"] == odt.DEFAULT_EDITION and opts["language"] == "MatchOS" and opts["arch"] == "64"
+    assert opts["apps"] == ["Word"]
+    # Publisher does not exist in LTSC 2024
+    assert "Publisher" not in odt.options(apps=["Publisher"])["apps"]
+
+
+def test_odt_keys_match_catalog():
+    """Every key in the ODT table is a known Office GVLK from the products list."""
+    from kmsconsole import odt
+    for _, key, _, _ in odt.EDITIONS.values():
+        assert scripts._KEY_RE.match(key)
+    for extras in odt.EXTRAS.values():
+        for _, _, key in extras.values():
+            assert scripts._KEY_RE.match(key)
