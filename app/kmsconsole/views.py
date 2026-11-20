@@ -10,7 +10,7 @@ from flask import (Blueprint, Response, abort, flash, g, jsonify, make_response,
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-from . import backup, config, i18n, kms, mailer, network, remote, scheduler, scripts, store, system
+from . import backup, config, i18n, kms, mailer, network, odt, remote, scheduler, scripts, store, system
 from .netrender import NetError
 
 bp = Blueprint("main", __name__)
@@ -208,6 +208,24 @@ def _eval_target():
     return target if target in scripts.EVAL_TARGETS else "auto"
 
 
+def _odt_options():
+    """Office install choices from the query string (the form on the Install Office tab)."""
+    a = request.args
+    chosen = "set" in a
+    return odt.options(edition=a.get("edition", odt.DEFAULT_EDITION), language=a.get("lang", "MatchOS"),
+                       arch=a.get("arch", "64"), apps=a.getlist("app") if chosen else None,
+                       visio=a.get("visio") == "1", project=a.get("project") == "1",
+                       remove=(a.get("remove") == "1") if chosen else True)
+
+
+def _odt_query(opts):
+    q = {"set": "1", "edition": opts["edition"], "lang": opts["language"], "arch": opts["arch"], "app": opts["apps"]}
+    for k in ("visio", "project", "remove"):
+        if opts[k]:
+            q[k] = "1"
+    return q
+
+
 def _script_args(kind, sku_id):
     sku = kms.find_sku(sku_id) if sku_id and not kind.startswith("eval-") else None
     domain = _dns_domain()
@@ -219,6 +237,7 @@ def _script_args(kind, sku_id):
         "office_dir": kms.office_version(sku["group"]) if sku and sku["kind"] == "office" else "Office16",
         "domain": domain,
         "target": _eval_target(),
+        "odt": _odt_options() if kind.startswith("odt-") else None,
     }
 
 
@@ -226,7 +245,7 @@ def _script_args(kind, sku_id):
 @login_required
 def activation():
     tab = request.args.get("tab", "windows")
-    if tab not in ("windows", "eval", "office", "gpo", "dns"):
+    if tab not in ("windows", "eval", "office", "odt", "gpo", "dns"):
         tab = "windows"
     catalog = kms.catalog()
     kind_for_tab = "office" if tab == "office" else "windows"
@@ -242,6 +261,10 @@ def activation():
     if tab == "eval":
         sku_id = ""
         kind = f"eval-{'ps1' if fmt == 'ps1' else 'cmd'}"
+    elif tab == "odt":
+        sku_id = ""
+        fmt = "xml" if fmt == "xml" else "ps1"
+        kind = f"odt-{fmt}"
     elif tab in ("windows", "office"):
         kind = f"{tab}-{'ps1' if fmt == 'ps1' else 'cmd'}"
     else:
@@ -254,7 +277,9 @@ def activation():
                            target=args["target"], eval_targets=scripts.EVAL_TARGETS,
                            server_versions=[v[0] for v in scripts.SERVER_GVLK.values()],
                            server_keys=sorted(scripts.SERVER_GVLK.items(), reverse=True),
-                           host_is_ip=bool(re.match(r"^[0-9.]+$", args["host"]) or ":" in args["host"]))
+                           host_is_ip=bool(re.match(r"^[0-9.]+$", args["host"]) or ":" in args["host"]),
+                           odt=odt, odt_opts=args["odt"], odt_query=_odt_query(args["odt"]) if args["odt"] else {},
+                           odt_products=odt.products(args["odt"]) if args["odt"] else [])
 
 
 @bp.route("/activation/download/<kind>")

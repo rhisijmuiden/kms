@@ -4,7 +4,8 @@ from pathlib import Path
 
 PAGES = ["/", "/clients", "/clients?f=office&q=pc", "/activation", "/activation?tab=office&fmt=ps1", "/activation?tab=gpo",
          "/activation?tab=gpo&fmt=ps1", "/activation?tab=dns", "/activation?tab=eval",
-         "/activation?tab=eval&fmt=cmd&target=ServerDatacenter", "/products", "/server", "/mail", "/backups", "/users"]
+         "/activation?tab=eval&fmt=cmd&target=ServerDatacenter", "/activation?tab=odt",
+         "/activation?tab=odt&fmt=xml&set=1&edition=ProPlus2019Volume&app=Word&visio=1", "/products", "/server", "/mail", "/backups", "/users"]
 
 
 def test_pages_render(client):
@@ -96,3 +97,16 @@ def test_server_product_points_to_eval_tab(client):
     assert "tab=eval" in page and "target=ServerStandard" in page
     page = client.get("/activation?tab=eval").get_data(as_text=True)
     assert "TVRH6-WHNXV-R9WG3-9XRFY-MY832" in page and "D764K-2NDRG-47T6Q-P8T8W-YP6DF" in page and "26100" in page
+
+
+def test_odt_tab_and_download(client):
+    page = client.get("/activation?tab=odt").get_data(as_text=True)
+    assert "install-office.ps1" in page and "configuration.xml" in page and "Office LTSC Professional Plus 2024" in page
+    r = client.get("/activation/download/odt-xml?set=1&edition=Standard2024Volume&lang=nl-nl&app=Word&app=Excel&project=1")
+    body = r.get_data(as_text=True)
+    assert r.status_code == 200 and "configuration.xml" in r.headers["Content-Disposition"]
+    assert 'Product ID="Standard2024Volume"' in body and 'Product ID="ProjectPro2024Volume"' in body
+    assert '<ExcludeApp ID="Outlook" />' in body and '<Language ID="nl-nl" />' in body
+    r = client.get("/activation/download/odt-ps1?set=1&edition=ProPlus2021Volume&arch=32")
+    body = r.get_data(as_text=True)
+    assert '$Edition  = "ProPlus2021Volume"' in body and '$Arch     = "32"' in body and "$NoRemove = $true" in body

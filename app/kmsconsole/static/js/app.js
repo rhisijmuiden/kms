@@ -35,7 +35,7 @@
   });
 
   // auto-submit selects
-  document.querySelectorAll("select[data-autosubmit]").forEach((s) => s.addEventListener("change", () => s.form.submit()));
+  document.querySelectorAll("select[data-autosubmit], input[data-autosubmit]").forEach((s) => s.addEventListener("change", () => s.form.submit()));
 
   // ---------------------------------------------------------------- info dialog
   const dlg = document.getElementById("info-dialog");
