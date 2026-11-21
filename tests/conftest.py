@@ -43,6 +43,8 @@ def client(env):
     network.invalidate()
     app = create_app(start_scheduler=False, testing=True)
     c = app.test_client()
-    r = c.post("/setup", data={"username": "admin", "password": "secretpass1", "password2": "secretpass1"})
+    from kmsconsole import bootstrap
+    bootstrap.set_password("admin", "secretpass1", must_change=False)
+    r = c.post("/login", data={"username": "admin", "password": "secretpass1"})
     assert r.status_code == 302
     return c

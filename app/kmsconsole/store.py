@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   email TEXT DEFAULT '',
   lang TEXT DEFAULT 'en',
-  created INTEGER NOT NULL
+  created INTEGER NOT NULL,
+  must_change INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS backups (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +98,8 @@ DEFAULTS = {
     "net.kms_restrict": False,       # True = only kms_acl may use the KMS port
     "net.blocked_alerted": {},
     "net.last_error": "",
+    # First steps checklist on the dashboard
+    "onboarding.dismissed": False,
     # Updates
     "update.channel": "production",
     "update.branch_production": "master",
@@ -136,6 +139,9 @@ def connect():
 def init():
     with connect() as con:
         con.executescript(SCHEMA)
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
+        if "must_change" not in cols:  # installs from before 2.3.0
+            con.execute("ALTER TABLE users ADD COLUMN must_change INTEGER DEFAULT 0")
     _fernet()  # create the encryption key on first start
 
 

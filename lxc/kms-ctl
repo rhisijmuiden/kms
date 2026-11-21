@@ -13,6 +13,47 @@ BRANCH_RE='^[A-Za-z0-9._/-]{1,100}$'
 die() { echo "$*" >&2; exit 1; }
 need_branch() { [[ "${1:-}" =~ $BRANCH_RE ]] && [[ "$1" != *..* ]] || die "invalid branch name"; }
 json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+run_py() { (cd / && sudo -u kms env KMS_CONSOLE_ROOT="$APP_DIR" PYTHONPATH="$APP_DIR/app" "$VENV/bin/python" "$@"); }
+
+CRED_FILE=/root/kms-credentials.txt
+ISSUE_FILE=/etc/issue.d/kms-console.issue
+console_port() { (. "$CONF_DIR/console.env" 2>/dev/null; echo "${KMS_CONSOLE_PORT:-8080}"); }
+console_url() {
+  local ip; ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  echo "http://${1:-${ip:-<ip-address>}}:$(console_port)"
+}
+
+# Console login screen (Proxmox: the Console of the container). \4 is the current IPv4 address, filled in by agetty.
+write_banner() {
+  local user="${1:-}" pw="${2:-}"
+  install -d -m 0755 /etc/issue.d
+  {
+    echo
+    echo "  KMS Console $(cat "$APP_DIR/VERSION" 2>/dev/null)"
+    echo "  Web interface:  $(console_url '\4')"
+    if [[ -n "$pw" ]]; then
+      echo "  Username:       $user"
+      echo "  Password:       $pw"
+    fi
+    echo
+  } > "$ISSUE_FILE.tmp"
+  chmod 0644 "$ISSUE_FILE.tmp"; mv "$ISSUE_FILE.tmp" "$ISSUE_FILE"
+}
+
+write_credentials() {
+  local user="$1" pw="$2"
+  # Shown at every root login (/etc/profile.d/kms-console.sh) until you choose your own password in the web GUI.
+  ( umask 077; printf 'Username:       %s\nPassword:       %s\n' "$user" "$pw" > "$CRED_FILE" )
+  write_banner "$user" "$pw"
+}
+
+print_credentials() {
+  echo
+  echo "  Web interface:  $(console_url)"
+  echo "  Username:       $1"
+  echo "  Password:       $2"
+  echo
+}
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
@@ -145,23 +186,46 @@ case "$cmd" in
     echo "Web access list cleared. The web interface is open again on port 8080."
     ;;
 
+  init-admin)
+    # Installer and first boot: create the administrator with a random password when there is no user yet.
+    pw="$(run_py -m kmsconsole.bootstrap init-admin admin)"
+    if [[ -n "$pw" ]]; then
+      write_credentials admin "$pw"
+      print_credentials admin "$pw"
+    else
+      write_banner
+      echo "An administrator account already exists. Forgot the password? Run: kms-ctl reset-password admin"
+    fi
+    ;;
+
   reset-password)
     user="${1:-admin}"
     [[ "$user" =~ ^[A-Za-z0-9._@-]{3,64}$ ]] || die "invalid username"
-    pw="$(python3 -c 'import secrets; print(secrets.token_urlsafe(12))')"
-    sudo -u kms env KMS_CONSOLE_ROOT="$APP_DIR" PYTHONPATH="$APP_DIR/app" "$VENV/bin/python" - "$user" "$pw" <<'EOF'
-import sys, time
-from werkzeug.security import generate_password_hash
-from kmsconsole import store
-store.init()
-user, pw = sys.argv[1], sys.argv[2]
-with store.connect() as con:
-    cur = con.execute("UPDATE users SET password_hash=? WHERE username=?", (generate_password_hash(pw), user))
-    if cur.rowcount == 0:
-        con.execute("INSERT INTO users(username, password_hash, email, lang, created) VALUES(?,?,?,?,?)",
-                    (user, generate_password_hash(pw), "", "en", int(time.time())))
-EOF
-    echo "New password for $user: $pw"
+    pw="$(run_py -m kmsconsole.bootstrap reset-password "$user")"
+    write_credentials "$user" "$pw"
+    print_credentials "$user" "$pw"
+    ;;
+
+  clear-credentials)
+    # Called by the web GUI once the generated password has been replaced by your own.
+    rm -f "$CRED_FILE"
+    write_banner
+    echo ok
+    ;;
+
+  banner)
+    write_banner
+    echo ok
+    ;;
+
+  firstboot)
+    # First start of a container made from the KMS Console CT template: give it its own keys and password.
+    [[ -f "$CONF_DIR/firstboot" ]] || { echo "not a first boot"; exit 0; }
+    command -v ssh-keygen >/dev/null && ssh-keygen -A >/dev/null 2>&1 || true
+    rm -f "$CONF_DIR/secret.key"   # new encryption key for stored passwords, created on first use
+    "$0" init-admin >/dev/null
+    rm -f "$CONF_DIR/firstboot"
+    echo "first boot done"
     ;;
 
   *)
@@ -174,7 +238,11 @@ usage: kms-ctl <command>
   check <branch>         compare installed version with a branch
   update <branch>        update KMS Console to a branch (runs in the background)
   update-log             output of the last update
+  init-admin             create the administrator with a random password (only when there is no user)
   reset-password [user]  set a new random password (creates the user when missing)
+  clear-credentials      remove the generated password from the console screen
+  banner                 rewrite the console login screen
+  firstboot              first start of the CT template (run by kms-firstboot.service)
   net-apply              load firewall and Caddy from network settings
   net-blocked            addresses blocked on the KMS port (nft JSON)
   net-status             firewall and Caddy state as JSON

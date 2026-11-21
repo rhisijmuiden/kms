@@ -12,6 +12,8 @@
 #   KMS_PORT      KMS port                         (default 1688)
 #
 # Run again with --upgrade to refresh dependencies, services and the helper after a git update.
+# --template prepares a Proxmox CT template (lxc/build-template.sh, in a chroot): nothing is started and the
+# administrator password is made at the first boot of each container (kms-firstboot.service).
 set -euo pipefail
 
 KMS_REPO="${KMS_REPO:-https://github.com/rhisijmuiden/kms.git}"
@@ -27,7 +29,13 @@ PYKMS_DIR=/opt/py-kms
 DATA_DIR=/var/lib/kms
 CONF_DIR=/etc/kms-console
 UPGRADE=0
-[[ "${1:-}" == "--upgrade" ]] && UPGRADE=1
+TEMPLATE=0
+case "${1:-}" in
+  --upgrade) UPGRADE=1 ;;
+  --template) TEMPLATE=1 ;;
+  "") ;;
+  *) echo "usage: install.sh [--upgrade|--template]" >&2; exit 2 ;;
+esac
 
 c_ok=$'\e[32m'; c_info=$'\e[36m'; c_err=$'\e[31m'; c_off=$'\e[0m'
 info() { printf '%s==>%s %s\n' "$c_info" "$c_off" "$*"; }
@@ -132,6 +140,17 @@ chmod 0440 /etc/sudoers.d/kms-console
 visudo -cf /etc/sudoers.d/kms-console >/dev/null || die "sudoers rule invalid"
 
 install -o root -g root -m 0644 "$APP_DIR"/lxc/systemd/*.service /etc/systemd/system/
+install -o root -g root -m 0644 "$APP_DIR/lxc/profile.d-kms-console.sh" /etc/profile.d/kms-console.sh
+
+if [[ $TEMPLATE -eq 1 ]]; then
+  # Chroot of the CT template: enable only, every container starts and gets its own password on first boot
+  systemctl enable --quiet kms-server.service kms-console.service kms-firewall.service kms-firstboot.service
+  touch "$CONF_DIR/firstboot"
+  rm -f "$CONF_DIR/secret.key" "$DATA_DIR/console.db" "$DATA_DIR/kms.db"
+  ok "template ready, first boot creates the administrator"
+  exit 0
+fi
+
 systemctl daemon-reload
 systemctl enable --quiet kms-server.service kms-console.service kms-firewall.service
 /usr/local/sbin/kms-ctl net-apply >/dev/null || echo "warning: Network & access settings could not be applied, see the web GUI"
@@ -140,8 +159,13 @@ systemctl restart kms-console.service
 ok "services kms-server and kms-console"
 
 sleep 2
-IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-systemctl is-active --quiet kms-server && ok "KMS server listening on ${IP:-<ip>}:$(. "$CONF_DIR/kms.env"; echo "$KMS_PORT")" || echo "warning: kms-server is not running, see: journalctl -u kms-server"
-systemctl is-active --quiet kms-console && ok "Web GUI: http://${IP:-<ip>}:$(. "$CONF_DIR/console.env"; echo "$KMS_CONSOLE_PORT")" || echo "warning: kms-console is not running, see: journalctl -u kms-console"
-[[ $UPGRADE -eq 0 ]] && echo "Open the web GUI to create the administrator account."
+systemctl is-active --quiet kms-server || echo "warning: kms-server is not running, see: journalctl -u kms-server"
+systemctl is-active --quiet kms-console || echo "warning: kms-console is not running, see: journalctl -u kms-console"
+[[ $UPGRADE -eq 1 ]] && exit 0
+
+# Fresh install: the administrator gets a random password; everything else is configured in the web GUI.
+echo
+printf '%sKMS Console %s is installed%s\n' "$c_ok" "$(cat "$APP_DIR/VERSION")" "$c_off"
+/usr/local/sbin/kms-ctl init-admin
+echo "Sign in and choose your own password. Everything else is set up in the web interface."
 exit 0
