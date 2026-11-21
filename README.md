@@ -7,6 +7,7 @@ A KMS server for Windows and Office volume activation, running as a **standalone
 * **py-kms engine** as a systemd service, no Docker needed
 * **Web GUI**: dashboard, activated clients, activation guide with ready-made scripts that point to your container, all products and GVLK keys
 * **Activation scripts** for Windows (`.cmd` / PowerShell), Office 2010 to LTSC 2024, registry / Group Policy and DNS auto discovery
+* **Office installer**: a PowerShell script that installs Office LTSC 2024, LTSC 2021 or 2019 (ProPlus or Standard, optional Visio and Project) with the Office Deployment Tool and the KMS client key, then activates against your container
 * **Backups**: full and incremental, to FTP, FTPS, SCP or SFTP, restore from the remote location, optional AES encryption, schedule
 * **Mail**: your own SMTP server (STARTTLS, SSL/TLS, TLS 1.2+) for backup reports and update notices
 * **Info & updates** in the GUI: version, update check, one-click update, switch between the production and test branch
@@ -29,7 +30,7 @@ Every release has a ready-made Debian 13 CT template with KMS Console installed.
 3. **Create CT**, pick the template, keep **Unprivileged container** on. 1 core, 512 MB and 4 GB disk is plenty. Give it a static IP or DHCP.
 4. Start the container and open its **Console**. The login screen shows:
    ```
-   KMS Console 2.3.0
+   KMS Console 2.4.0
    Web interface:  http://10.10.4.113:8080
    Username:       admin
    Password:       Kx7m-Qp2v-9TzR-wL4e
@@ -49,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/kms/master/lxc/install
 When it is done it shows only what you need:
 
 ```
-KMS Console 2.3.0 is installed
+KMS Console 2.4.0 is installed
 
   Web interface:  http://10.10.4.113:8080
   Username:       admin
