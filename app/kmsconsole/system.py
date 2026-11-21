@@ -52,6 +52,14 @@ def write_env():
     os.replace(tmp, config.KMS_ENV_FILE)
 
 
+def clear_credentials():
+    """Remove the generated password from the console banner and /root/kms-credentials.txt."""
+    try:
+        ctl("clear-credentials", timeout=20)
+    except SystemError_:
+        pass
+
+
 def restart_server():
     write_env()
     return ctl("restart-server")

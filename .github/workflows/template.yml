@@ -1,0 +1,62 @@
+name: CT template
+# Builds the Proxmox CT template (Debian 13 + KMS Console), boots it once to test the first start,
+# and attaches it to the GitHub release. In Proxmox: local > CT Templates > Download from URL.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+  push:
+    paths:
+      - "lxc/**"
+      - ".github/workflows/template.yml"
+      - ".github/scripts/template-smoke.sh"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Branch to install
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "branch=${{ github.event.release.target_commitish }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build template (Debian 13)
+        run: |
+          docker run --rm --privileged -v "$PWD:/src" -w /src debian:trixie bash -c '
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends debootstrap zstd ca-certificates >/dev/null &&
+            bash lxc/build-template.sh --repo "https://github.com/${{ github.repository }}.git" --branch "${{ steps.ref.outputs.branch }}" --out dist'
+          echo "NAME=$(cat dist/name.txt)" >> "$GITHUB_ENV"
+
+      - name: Boot test
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq systemd-container zstd >/dev/null
+          sudo bash .github/scripts/template-smoke.sh "dist/$NAME"
+
+      - name: Upload build
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ct-template
+          path: dist/*.tar.zst*
+          retention-days: 7
+          compression-level: 0
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Fixed name as well, so .../releases/latest/download/debian-13-kms-console_amd64.tar.zst always works
+          cp "dist/$NAME" dist/debian-13-kms-console_amd64.tar.zst
+          (cd dist && sha256sum debian-13-kms-console_amd64.tar.zst > debian-13-kms-console_amd64.tar.zst.sha256)
+          gh release upload "${{ github.event.release.tag_name }}" --clobber \
+            "dist/$NAME" "dist/$NAME.sha256" dist/debian-13-kms-console_amd64.tar.zst dist/debian-13-kms-console_amd64.tar.zst.sha256

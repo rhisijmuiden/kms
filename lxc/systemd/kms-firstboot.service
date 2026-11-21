@@ -1,0 +1,15 @@
+[Unit]
+Description=KMS Console first boot (own keys and administrator password)
+Documentation=https://github.com/rhisijmuiden/kms
+ConditionPathExists=/etc/kms-console/firstboot
+After=local-fs.target
+Before=kms-server.service kms-console.service getty-pre.target systemd-user-sessions.service ssh.service
+Wants=getty-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/kms-ctl firstboot
+
+[Install]
+WantedBy=multi-user.target

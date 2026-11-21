@@ -16,9 +16,53 @@ A KMS server for Windows and Office volume activation, running as a **standalone
 
 ![Activation guide](img/console-activation.png)
 
-## Install on Proxmox
+## Install on Proxmox with the CT template (recommended)
 
-Run on the Proxmox host as root. This creates an unprivileged Debian 13 container and installs everything:
+Every release has a ready-made Debian 13 CT template with KMS Console installed.
+
+1. In Proxmox, open **local** (or another storage with *Container template*) › **CT Templates** › **Download from URL**.
+2. Paste this URL and click **Query URL**, then **Download**:
+   ```
+   https://github.com/rhisijmuiden/kms/releases/latest/download/debian-13-kms-console_amd64.tar.zst
+   ```
+   For a fixed version, take `debian-13-kms-console_<version>_amd64.tar.zst` from the [releases](https://github.com/rhisijmuiden/kms/releases). The `.sha256` file next to it is the checksum.
+3. **Create CT**, pick the template, keep **Unprivileged container** on. 1 core, 512 MB and 4 GB disk is plenty. Give it a static IP or DHCP.
+4. Start the container and open its **Console**. The login screen shows:
+   ```
+   KMS Console 2.3.0
+   Web interface:  http://10.10.4.113:8080
+   Username:       admin
+   Password:       Kx7m-Qp2v-9TzR-wL4e
+   ```
+5. Sign in, choose your own password, and do the rest in the web interface.
+
+At its first start every container makes its own SSH host keys, encryption key and administrator password, so you can create as many containers from the template as you like. The template needs no internet to start; updates come from git as usual (**Info & updates**).
+
+## Install on Debian 13 (bare metal, VM or LXC)
+
+On a clean Debian 13 (or 12) as root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/kms/master/lxc/install.sh | bash
+```
+
+When it is done it shows only what you need:
+
+```
+KMS Console 2.3.0 is installed
+
+  Web interface:  http://10.10.4.113:8080
+  Username:       admin
+  Password:       Kx7m-Qp2v-9TzR-wL4e
+
+Sign in and choose your own password. Everything else is set up in the web interface.
+```
+
+The same details are shown at every root login until you have chosen your own password. Forgot it? Run `kms-ctl reset-password admin`.
+
+### One command on the Proxmox host
+
+This creates an unprivileged Debian 13 container and runs the installer in it:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/kms/master/lxc/proxmox-create.sh)"
@@ -43,12 +87,17 @@ bash proxmox-create.sh --hostname kms --ip 10.0.20.15/24 --gw 10.0.20.1 --bridge
 | `--branch` | `master` | Branch to install |
 | `--console-port` | `8080` | Web GUI port |
 
-Open `http://<container-ip>:8080` and create the administrator account.
+### After the first login
 
-### Install in an existing Debian container or VM
+The dashboard shows **First steps**: KMS host name, mail server, remote backup location and network & access. Do them in any order, or hide the list.
+
+### Building the template yourself
+
+GitHub Actions builds the template on every release (workflow *CT template*), boots it once to test the first start, and attaches it to the release. By hand, as root on Debian 13:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/kms/master/lxc/install.sh | bash
+apt install debootstrap zstd
+bash lxc/build-template.sh --branch master --out dist
 ```
 
 ## Activate clients

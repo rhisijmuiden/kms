@@ -35,7 +35,7 @@ def _current_user():
     if not uid:
         return None
     with store.connect() as con:
-        row = con.execute("SELECT id, username, email, lang FROM users WHERE id=?", (uid,)).fetchone()
+        row = con.execute("SELECT id, username, email, lang, must_change FROM users WHERE id=?", (uid,)).fetchone()
     return dict(row) if row else None
 
 
@@ -49,6 +49,10 @@ def login_required(view):
             if request.path.startswith("/api/"):
                 return jsonify(error="unauthorized"), 401
             return redirect(url_for("main.login", next=request.path))
+        if g.user.get("must_change") and request.endpoint != "main.change_password":
+            if request.path.startswith("/api/"):
+                return jsonify(error="password change required"), 403
+            return redirect(url_for("main.change_password"))
         return view(*args, **kwargs)
     return wrapped
 
@@ -57,27 +61,42 @@ def _password_ok(pw):
     return len(pw or "") >= 10
 
 
-@bp.route("/setup", methods=["GET", "POST"])
+@bp.route("/setup")
 def setup():
+    """No administrator yet. Accounts are created on the server (installer or first boot), never through an open
+    web page, so nobody on the network can claim the console before you do."""
     if _user_count() > 0:
         return redirect(url_for("main.login"))
+    return render_template("setup.html")
+
+
+@bp.route("/password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    forced = bool(g.user.get("must_change"))
     if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
         pw = request.form.get("password") or ""
-        if not re.match(r"^[A-Za-z0-9._@-]{3,64}$", username):
-            flash(_t("Use 3 to 64 letters, digits or . _ @ - for the username."), "error")
+        with store.connect() as con:
+            row = con.execute("SELECT password_hash FROM users WHERE id=?", (g.user["id"],)).fetchone()
+        if not forced and not check_password_hash(row["password_hash"], request.form.get("current") or ""):
+            flash(_t("Your current password is not correct."), "error")
         elif not _password_ok(pw):
             flash(_t("Use a password of at least 10 characters."), "error")
         elif pw != request.form.get("password2"):
             flash(_t("The passwords do not match."), "error")
+        elif check_password_hash(row["password_hash"], pw):
+            flash(_t("Choose a password that differs from the one you got at installation."), "error")
         else:
-            with store.connect() as con:
-                con.execute("INSERT INTO users(username, password_hash, email, lang, created) VALUES(?,?,?,?,?)",
-                            (username, generate_password_hash(pw), request.form.get("email", ""), g.lang, int(time.time())))
-            system_env_init()
-            flash(_t("Welcome! Your administrator account is ready."), "ok")
-            return _do_login(username)
-    return render_template("setup.html")
+            _store_password(g.user["id"], pw)
+            flash(_t("Your password has been changed."), "ok")
+            return redirect(url_for("main.dashboard"))
+    return render_template("password.html", forced=forced)
+
+
+def _store_password(uid, pw):
+    with store.connect() as con:
+        con.execute("UPDATE users SET password_hash=?, must_change=0 WHERE id=?", (generate_password_hash(pw), uid))
+    system.clear_credentials()
 
 
 def system_env_init():
@@ -153,7 +172,37 @@ def dashboard():
     return render_template("dashboard.html", active="dashboard", stats=kms.stats(rows), recent=rows[:6],
                            host=kms.public_host(), port=store.get("kms.port"), alive=kms.server_alive(),
                            last_backup=store.get("backup.last") or {}, mail=store.section("mail"),
-                           backup_settings=store.section("backup"), events=store.events(8))
+                           backup_settings=store.section("backup"), events=store.events(8), onboarding=_onboarding())
+
+
+def _onboarding():
+    """First steps after installation. Hidden once everything is done or the checklist is dismissed."""
+    if store.get("onboarding.dismissed"):
+        return None
+    mail = store.section("mail")
+    steps = [
+        ("password", "Choose your own password", "Done when you signed in with your own password.", True,
+         url_for("main.users")),
+        ("server", "Set the KMS host name", "The name or address Windows clients use, for example kms.lan.",
+         bool(store.get("kms.public_host")), url_for("main.server")),
+        ("mail", "Connect your mail server", "For backup reports, update notices and blocked attempts.",
+         bool(mail["enabled"] and mail["host"]), url_for("main.mail")),
+        ("backups", "Add a remote backup location", "FTP, FTPS, SCP or SFTP, so a backup survives the container.",
+         bool(store.get("backup.remote_enabled") and store.get("backup.host")), url_for("main.backups")),
+        ("network", "Check network & access", "Local network, your own HTTPS with Caddy, or a reverse proxy.",
+         store.get("net.mode") != "lan" or bool(store.get("net.web_acl")), url_for("main.network")),
+    ]
+    items = [dict(id=i, title=t, hint=h, done=d, href=u) for i, t, h, d, u in steps]
+    if all(i["done"] for i in items):
+        return None
+    return dict(items=items, done=sum(i["done"] for i in items), total=len(items))
+
+
+@bp.route("/onboarding/dismiss", methods=["POST"])
+@login_required
+def onboarding_dismiss():
+    store.set("onboarding.dismissed", True)
+    return redirect(url_for("main.dashboard"))
 
 
 def _filtered_clients():
@@ -570,8 +619,7 @@ def users():
             if not _password_ok(pw):
                 flash(_t("Use a password of at least 10 characters."), "error")
             else:
-                with store.connect() as con:
-                    con.execute("UPDATE users SET password_hash=? WHERE id=?", (generate_password_hash(pw), g.user["id"]))
+                _store_password(g.user["id"], pw)
                 flash(_t("Your password has been changed."), "ok")
         return redirect(url_for("main.users"))
     with store.connect() as con:

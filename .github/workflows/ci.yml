@@ -19,4 +19,4 @@ jobs:
           KMS_PYKMS_DIR: /tmp/py-kms/py-kms
         run: python -m pytest -q tests
       - name: Shellcheck
-        run: shellcheck -S warning lxc/install.sh lxc/kms-ctl lxc/proxmox-create.sh
+        run: shellcheck -S warning lxc/*.sh lxc/kms-ctl .github/scripts/*.sh
