@@ -42,7 +42,7 @@ trap cleanup EXIT
 
 # Same base as the official Proxmox Debian templates: systemd, ifupdown (Proxmox writes
 # /etc/network/interfaces), SSH, and a few tools for the console.
-PKGS=systemd-sysv,ifupdown,dhcpcd-base,iproute2,iputils-ping,openssh-server,ca-certificates,curl,less,nano,procps,locales,tzdata
+PKGS=systemd-sysv,dbus,ifupdown,dhcpcd-base,iproute2,iputils-ping,openssh-server,ca-certificates,curl,less,nano,procps,locales,tzdata
 echo "==> debootstrap $SUITE ($ARCH)"
 debootstrap --variant=minbase --arch="$ARCH" --include="$PKGS" "$SUITE" "$ROOTFS" "$MIRROR"
 

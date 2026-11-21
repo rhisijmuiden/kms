@@ -27,7 +27,8 @@ cat "$ROOT/etc/issue.d/kms-console.issue"
 PW="$(awk '/^Password:/ {print $2}' "$ROOT/root/kms-credentials.txt")"
 [[ -n "$PW" ]] || { echo "no generated password"; exit 1; }
 grep -q "$PW" "$ROOT/etc/issue.d/kms-console.issue"
-systemctl -M kmstest is-active kms-server.service kms-console.service
+timeout 5 bash -c '</dev/tcp/127.0.0.1/1688' || { echo "KMS port 1688 is not open"; exit 1; }
+echo "KMS server listens on 1688"
 
 python3 - "$PW" <<'PY'
 import http.cookiejar, re, sys, urllib.parse, urllib.request
