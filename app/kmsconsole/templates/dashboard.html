@@ -12,6 +12,26 @@
   <a class="btn btn-primary" href="{{ url_for('main.activation') }}">{{ t('Get activation script') }}</a>
 </header>
 
+{% if onboarding %}
+<section class="card onboarding" aria-label="{{ t('First steps') }}">
+  <div class="card-head">
+    <h2>{{ t('First steps') }}</h2>
+    <span class="pill pill-info">{{ t('{done} of {total} done', done=onboarding.done, total=onboarding.total) }}</span>
+    <form method="post" action="{{ url_for('main.onboarding_dismiss') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">{{ t('Hide') }}</button></form>
+  </div>
+  <p class="small muted" style="margin:0">{{ t('KMS Console is installed and running. These steps finish the setup; you can do them in any order.') }}</p>
+  <ol class="steps">
+    {% for s in onboarding["items"] %}
+    <li class="{{ 'is-done' if s.done }}"><a href="{{ s.href }}">
+      <span class="step-mark" aria-hidden="true">{% if s.done %}&#10003;{% else %}{{ loop.index }}{% endif %}</span>
+      <span><strong>{{ t(s.title) }}</strong><span>{{ t(s.hint) }}</span></span>
+      {% if s.done %}<span class="sr">{{ t('Done') }}</span>{% endif %}
+    </a></li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
 <section class="grid g4" aria-label="{{ t('Statistics') }}">
   <div class="stat"><span class="label">{{ t('Activated clients') }}</span><span class="value">{{ stats.total }}</span><span class="sub">{{ t('{n} new this week', n=stats.new_week) }}</span></div>
   <div class="stat"><span class="label">Windows</span><span class="value">{{ stats.windows }}</span><span class="sub">{{ t('{n} different products', n=stats.products) }}</span></div>

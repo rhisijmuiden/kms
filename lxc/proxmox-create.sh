@@ -98,11 +98,12 @@ pct exec "$CTID" -- bash -c 'getent hosts github.com >/dev/null 2>&1' || die "co
 info "Installing KMS Console ($BRANCH)"
 RAW="${REPO%.git}"; RAW="${RAW/github.com/raw.githubusercontent.com}/$BRANCH/lxc/install.sh"
 pct exec "$CTID" -- bash -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null"
-pct exec "$CTID" -- bash -c "curl -fsSL '$RAW' -o /root/kms-install.sh && KMS_REPO='$REPO' KMS_BRANCH='$BRANCH' CONSOLE_PORT='$CONSOLE_PORT' bash /root/kms-install.sh"
+pct exec "$CTID" -- bash -c "curl -fsSL '$RAW' -o /root/kms-install.sh && KMS_REPO='$REPO' KMS_BRANCH='$BRANCH' CONSOLE_PORT='$CONSOLE_PORT' bash /root/kms-install.sh > /root/kms-install.log 2>&1" \
+  || { pct exec "$CTID" -- tail -n 30 /root/kms-install.log; die "installation failed, full log in the container: /root/kms-install.log"; }
 
 CT_IP="$(pct exec "$CTID" -- hostname -I | awk '{print $1}')"
 echo
 echo "KMS Console is ready in container $CTID"
-echo "  Web GUI:     http://$CT_IP:$CONSOLE_PORT"
-echo "  KMS server:  $CT_IP:1688"
-echo "Open the web GUI to create your administrator account."
+echo "  Web interface:  http://$CT_IP:$CONSOLE_PORT"
+pct exec "$CTID" -- cat /root/kms-credentials.txt | sed 's/^/  /'
+echo "Sign in and choose your own password. Everything else is set up in the web interface."

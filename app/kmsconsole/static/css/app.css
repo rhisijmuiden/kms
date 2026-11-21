@@ -232,3 +232,16 @@ dl.facts dd{margin:0;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .acl-add .f.grow{flex:2 1 260px}
 .mono{font-family:var(--font-mono);font-size:13px}
 @media (max-width:1100px){.modes{grid-template-columns:minmax(0,1fr)}}
+
+/* First steps checklist (dashboard) */
+.pill-info{background:var(--info-bg);color:var(--lagoon-text)}
+.onboarding{gap:14px}
+.onboarding form{margin:0}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.steps a{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:var(--r-md);text-decoration:none;color:inherit;height:100%}
+.steps a:hover{border-color:var(--lagoon)}
+.steps strong{display:block;font-size:14px}
+.steps a>span:nth-child(2)>span{font-size:13px;color:var(--slate)}
+.step-mark{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--mist);color:var(--ink)}
+.steps .is-done .step-mark{background:var(--ok-bg);color:var(--ok)}
+.steps .is-done strong{color:var(--slate)}
