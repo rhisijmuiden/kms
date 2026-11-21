@@ -33,6 +33,7 @@ command -v zstd >/dev/null || die "zstd is not installed"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOTFS="$(mktemp -d /tmp/kms-rootfs.XXXXXX)"
+chmod 0755 "$ROOTFS"   # mktemp makes it 0700; the tar keeps that mode for / in every container
 cleanup() {
   for m in dev/pts dev proc sys; do mountpoint -q "$ROOTFS/$m" && umount -l "$ROOTFS/$m"; done
   rm -rf "$ROOTFS"
